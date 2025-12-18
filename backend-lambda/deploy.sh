@@ -16,7 +16,7 @@ PACKAGE_DIR="$TEMP_DIR/package"
 mkdir -p "$PACKAGE_DIR"
 
 # Install dependencies
-pip install -r requirements.txt -t "$PACKAGE_DIR" --quiet
+pip3 install -r requirements.txt -t "$PACKAGE_DIR" --quiet
 
 # Copy source files
 cp *.py "$PACKAGE_DIR/"
