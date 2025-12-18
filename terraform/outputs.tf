@@ -28,28 +28,12 @@ output "lambda_function_url" {
   value       = aws_lambda_function_url.api.function_url
 }
 
-output "aurora_endpoint" {
-  description = "Aurora cluster endpoint"
-  value       = aws_rds_cluster.main.endpoint
-  sensitive   = true
-}
-
-output "db_secret_arn" {
-  description = "ARN of the database credentials secret"
-  value       = aws_secretsmanager_secret.db_credentials.arn
+output "dynamodb_table_name" {
+  description = "DynamoDB table name for requests"
+  value       = aws_dynamodb_table.requests.name
 }
 
 output "app_secret_arn" {
   description = "ARN of the application config secret"
   value       = aws_secretsmanager_secret.app_config.arn
-}
-
-output "vpc_id" {
-  description = "VPC ID"
-  value       = aws_vpc.main.id
-}
-
-output "private_subnet_ids" {
-  description = "Private subnet IDs"
-  value       = aws_subnet.private[*].id
 }

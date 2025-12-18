@@ -49,12 +49,6 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Lambda VPC execution policy
-resource "aws_iam_role_policy_attachment" "lambda_vpc" {
-  role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
 # Secrets Manager access policy
 resource "aws_iam_role_policy" "lambda_secrets" {
   name = "${local.name_prefix}-lambda-secrets"
@@ -69,8 +63,32 @@ resource "aws_iam_role_policy" "lambda_secrets" {
           "secretsmanager:GetSecretValue"
         ]
         Resource = [
-          aws_secretsmanager_secret.db_credentials.arn,
           aws_secretsmanager_secret.app_config.arn
+        ]
+      }
+    ]
+  })
+}
+
+# DynamoDB access policy
+resource "aws_iam_role_policy" "lambda_dynamodb" {
+  name = "${local.name_prefix}-lambda-dynamodb"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          aws_dynamodb_table.requests.arn
         ]
       }
     ]
@@ -91,14 +109,11 @@ resource "aws_lambda_function" "api" {
   filename         = data.archive_file.lambda_placeholder.output_path
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
 
-  vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.lambda.id]
-  }
+  # No VPC - Lambda can access internet directly for TMDB API
 
   environment {
     variables = {
-      DB_SECRET_ARN  = aws_secretsmanager_secret.db_credentials.arn
+      DYNAMODB_TABLE = aws_dynamodb_table.requests.name
       APP_SECRET_ARN = aws_secretsmanager_secret.app_config.arn
       AWS_REGION_NAME = var.aws_region
     }

@@ -45,18 +45,6 @@ variable "feed_token" {
   default     = ""
 }
 
-variable "db_min_capacity" {
-  description = "Minimum Aurora Serverless capacity units"
-  type        = number
-  default     = 0.5
-}
-
-variable "db_max_capacity" {
-  description = "Maximum Aurora Serverless capacity units"
-  type        = number
-  default     = 2
-}
-
 variable "lambda_memory" {
   description = "Lambda function memory in MB"
   type        = number
