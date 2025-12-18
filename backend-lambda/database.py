@@ -4,10 +4,42 @@ from psycopg_pool import ConnectionPool
 from contextlib import contextmanager
 from config import get_settings
 import logging
+import socket
+import time
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
+logger.info("Loading database module...")
 settings = get_settings()
+logger.info("Settings loaded in database module")
+
+
+def test_socket_connectivity(host: str, port: int, timeout: float = 5.0) -> tuple[bool, str]:
+    """Test basic TCP connectivity to the database host."""
+    try:
+        logger.info(f"Testing socket connectivity to {host}:{port}...")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        start = time.time()
+        result = sock.connect_ex((host, port))
+        elapsed = time.time() - start
+        sock.close()
+        if result == 0:
+            logger.info(f"Socket connection successful in {elapsed:.2f}s")
+            return True, f"Connected in {elapsed:.2f}s"
+        else:
+            logger.error(f"Socket connection failed: error code {result}")
+            return False, f"Connection refused (error {result})"
+    except socket.gaierror as e:
+        logger.error(f"DNS resolution failed for {host}: {e}")
+        return False, f"DNS resolution failed: {e}"
+    except socket.timeout:
+        logger.error(f"Socket connection timed out after {timeout}s")
+        return False, f"Connection timed out after {timeout}s"
+    except Exception as e:
+        logger.error(f"Socket test error: {e}")
+        return False, str(e)
 
 # Connection pool for better Lambda performance
 _pool: ConnectionPool | None = None
@@ -18,7 +50,20 @@ def get_pool() -> ConnectionPool:
     global _pool
     if _pool is None:
         logger.info(f"Creating connection pool to {settings.db_host}:{settings.db_port}/{settings.db_name}")
+
+        # Test basic socket connectivity first
+        if settings.db_host:
+            can_connect, msg = test_socket_connectivity(settings.db_host, settings.db_port, timeout=5.0)
+            if not can_connect:
+                logger.error(f"Cannot reach database server: {msg}")
+                raise ConnectionError(f"Database unreachable: {msg}")
+        else:
+            logger.error("db_host is empty - secrets may not have loaded correctly")
+            raise ValueError("Database host not configured")
+
         try:
+            logger.info("Socket test passed, creating connection pool...")
+            start = time.time()
             _pool = ConnectionPool(
                 settings.database_url,
                 min_size=1,
@@ -27,9 +72,9 @@ def get_pool() -> ConnectionPool:
                 timeout=10,  # Connection timeout
                 kwargs={"row_factory": dict_row}
             )
-            logger.info("Connection pool created successfully")
+            logger.info(f"Connection pool created successfully in {time.time() - start:.2f}s")
         except Exception as e:
-            logger.error(f"Failed to create connection pool: {e}")
+            logger.error(f"Failed to create connection pool: {type(e).__name__}: {e}")
             raise
     return _pool
 

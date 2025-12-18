@@ -8,9 +8,18 @@ import hmac
 import hashlib
 import base64
 import time
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+logger.info("Starting main.py module load...")
 
 from config import get_settings
+logger.info("Config module imported")
+
 from database import init_db, add_request, remove_request, get_all_requests, is_requested
+logger.info("Database module imported")
 from tmdb import tmdb_client
 from rss import (
     generate_movie_rss,
@@ -30,8 +39,15 @@ def ensure_db_initialized():
     """Initialize database tables once per Lambda instance."""
     global _db_initialized
     if not _db_initialized:
-        init_db()
-        _db_initialized = True
+        logger.info("Initializing database (first time for this Lambda instance)...")
+        start = time.time()
+        try:
+            init_db()
+            logger.info(f"Database initialized successfully in {time.time() - start:.2f}s")
+            _db_initialized = True
+        except Exception as e:
+            logger.error(f"Database initialization failed after {time.time() - start:.2f}s: {type(e).__name__}: {e}")
+            raise
 
 # Session duration: 30 days in seconds
 SESSION_DURATION_SECONDS = 30 * 24 * 60 * 60
@@ -391,7 +407,9 @@ def health_check():
 
 
 # Initialize database once per Lambda instance (at module load, not per request)
+logger.info("About to initialize database at module load time...")
 ensure_db_initialized()
+logger.info("Module load complete, handler ready")
 
 # Lambda handler - lifespan="off" since we handle init at module level
 handler = Mangum(app, lifespan="off")
