@@ -8,58 +8,66 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 - **TMDB Integration**: Search movies and TV shows using The Movie Database
 - **Sonarr/Radarr Import Lists**: Native JSON formats for direct import
 - **Feed Token Protection**: Optional token-based auth for feed endpoints
+- **Missing ID Warnings**: UI indicators when external IDs (IMDB/TVDB) are missing
 - **Modern UI**: Svelte-based responsive frontend
-- **Docker Ready**: Full Docker Compose setup with automatic HTTPS via Caddy
+- **Multiple Deployment Options**:
+  - Docker Compose with Caddy (auto HTTPS)
+  - AWS Serverless (Lambda + Aurora Serverless + CloudFront)
 
-## Architecture
+## Deployment Options
+
+### Option 1: Docker (Recommended for Self-Hosting)
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Browser   │────▶│    Caddy    │────▶│  Frontend   │
 │             │     │  (Reverse   │     │  (Svelte)   │
 └─────────────┘     │   Proxy +   │     └─────────────┘
-                    │   HTTPS)    │
-                    │             │     ┌─────────────┐
+                    │   HTTPS)    │     ┌─────────────┐
                     │             │────▶│   Backend   │
                     └─────────────┘     │  (FastAPI)  │
                                         └──────┬──────┘
-                                               │
                                         ┌──────▼──────┐
                                         │   SQLite    │
-                                        │  Database   │
                                         └─────────────┘
 ```
 
-## Quick Start
+### Option 2: AWS Serverless
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Browser   │────▶│ CloudFront  │────▶│  S3 Bucket  │
+│             │     │    (CDN)    │     │ (Frontend)  │
+└─────────────┘     │             │     └─────────────┘
+                    │             │     ┌─────────────┐
+                    │             │────▶│   Lambda    │
+                    └─────────────┘     │  (FastAPI)  │
+                                        └──────┬──────┘
+                                        ┌──────▼──────┐
+                                        │   Aurora    │
+                                        │ Serverless  │
+                                        │ PostgreSQL  │
+                                        └─────────────┘
+```
+
+## Quick Start (Docker)
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- TMDB API Key (get one free at https://www.themoviedb.org/settings/api)
+- TMDB API Key (free at https://www.themoviedb.org/settings/api)
 
 ### Setup
 
-1. Clone the repository:
+1. Clone and configure:
    ```bash
    git clone <repo-url>
    cd overseer-lite
-   ```
-
-2. Create your environment file:
-   ```bash
    cp .env.example .env
+   # Edit .env with your settings
    ```
 
-3. Edit `.env` with your settings:
-   ```env
-   APP_SECRET_KEY=your-random-secret-key
-   PRESHARED_PASSWORD=your-password
-   TMDB_API_KEY=your-tmdb-api-key
-   FEED_TOKEN=your-feed-token      # Optional: protects feed endpoints
-   DOMAIN=your-domain.com          # For production with HTTPS
-   ```
-
-4. Start the application:
+2. Start the application:
    ```bash
    # Development (HTTP only)
    docker compose up -d
@@ -68,11 +76,55 @@ A lightweight media request system that generates feeds compatible with Sonarr a
    docker compose -f docker-compose.prod.yml up -d
    ```
 
-5. Access the application at `http://localhost` (or `https://your-domain.com` in production)
+3. Access at `http://localhost` or `https://your-domain.com`
+
+## AWS Serverless Deployment
+
+### Prerequisites
+
+- AWS CLI configured
+- Terraform >= 1.0
+- Route53 hosted zone for your domain
+
+### Setup
+
+1. Configure Terraform variables:
+   ```bash
+   cd terraform
+   cp terraform.tfvars.example terraform.tfvars
+   # Edit terraform.tfvars
+   ```
+
+2. Deploy infrastructure:
+   ```bash
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+3. Deploy frontend to S3:
+   ```bash
+   cd ../frontend
+   npm install && npm run build
+   aws s3 sync build/ s3://$(terraform -chdir=../terraform output -raw frontend_bucket_name)
+   aws cloudfront create-invalidation --distribution-id $(terraform -chdir=../terraform output -raw cloudfront_distribution_id) --paths "/*"
+   ```
+
+4. Deploy backend to Lambda:
+   ```bash
+   cd ../backend-lambda
+   ./deploy.sh $(terraform -chdir=../terraform output -raw lambda_function_name) your-deployment-bucket
+   ```
+
+### AWS Cost Estimate
+
+With minimal usage:
+- **Aurora Serverless v2**: ~$0.12/ACU-hour (scales to near-zero when idle)
+- **Lambda**: Free tier covers most small deployments
+- **CloudFront**: ~$0.085/GB transfer
+- **S3**: Negligible for static hosting
 
 ## Import Lists for Sonarr/Radarr
-
-The recommended endpoints use native JSON formats supported by Sonarr and Radarr:
 
 ### Radarr (Movies)
 
@@ -81,10 +133,7 @@ The recommended endpoints use native JSON formats supported by Sonarr and Radarr
 | `/list/radarr` | JSON | **Recommended** - StevenLu Custom format with IMDB IDs |
 | `/rss/movies` | RSS | Alternative RSS format |
 
-**Setup in Radarr:**
-1. Go to Settings → Import Lists → Add
-2. Select "Custom Lists" → "StevenLu Custom"
-3. Enter URL: `https://your-domain.com/list/radarr?token=YOUR_TOKEN`
+**Setup:** Settings → Import Lists → Custom Lists → StevenLu Custom
 
 ### Sonarr (TV Shows)
 
@@ -93,19 +142,19 @@ The recommended endpoints use native JSON formats supported by Sonarr and Radarr
 | `/list/sonarr` | JSON | **Recommended** - Custom List format with TVDB IDs |
 | `/rss/tv` | RSS | Alternative RSS format |
 
-**Setup in Sonarr:**
-1. Go to Settings → Import Lists → Add
-2. Select "Custom Lists"
-3. Enter URL: `https://your-domain.com/list/sonarr?token=YOUR_TOKEN`
+**Setup:** Settings → Import Lists → Custom Lists
 
-### Feed Token
+### Feed Token Protection
 
-If `FEED_TOKEN` is set in your environment, all feed endpoints require authentication:
-```
-/list/radarr?token=YOUR_FEED_TOKEN
-/list/sonarr?token=YOUR_FEED_TOKEN
-/rss/movies?token=YOUR_FEED_TOKEN
-```
+If `FEED_TOKEN` is set, append `?token=YOUR_TOKEN` to feed URLs.
+
+## External ID Handling
+
+The application fetches external IDs from TMDB when items are requested:
+- **Movies**: IMDB ID (for Radarr)
+- **TV Shows**: TVDB ID (for Sonarr)
+
+Items missing these IDs will show a warning indicator and won't appear in the respective feeds.
 
 ## API Endpoints
 
@@ -117,10 +166,10 @@ If `FEED_TOKEN` is set in your environment, all feed endpoints require authentic
 | `/api/request` | POST | Add a request |
 | `/api/request/{type}/{id}` | DELETE | Remove a request |
 | `/api/requests` | GET | List all requests |
-| `/api/feeds` | GET | Get feed URLs and info |
+| `/api/feeds` | GET | Get feed URLs and setup info |
 | `/api/health` | GET | Health check |
 
-### Import List Endpoints
+### Feed Endpoints
 
 | Endpoint | Format | For |
 |----------|--------|-----|
@@ -130,24 +179,24 @@ If `FEED_TOKEN` is set in your environment, all feed endpoints require authentic
 | `/rss/tv` | RSS | Generic TV RSS |
 | `/rss/all` | RSS | Combined RSS |
 
-## Development
+## Project Structure
 
-### Backend Development
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload
 ```
-
-### Frontend Development
-
-```bash
-cd frontend
-npm install
-npm run dev
+overseer-lite/
+├── backend/              # Docker backend (SQLite)
+├── backend-lambda/       # AWS Lambda backend (PostgreSQL)
+├── frontend/             # Svelte SPA
+├── caddy/                # Caddy configs
+├── terraform/            # AWS infrastructure
+│   ├── main.tf
+│   ├── vpc.tf           # VPC for Aurora
+│   ├── aurora.tf        # Aurora Serverless v2
+│   ├── lambda.tf        # Lambda function
+│   ├── frontend.tf      # S3 + CloudFront
+│   ├── secrets.tf       # Secrets Manager
+│   └── outputs.tf
+├── docker-compose.yml
+└── docker-compose.prod.yml
 ```
 
 ## Environment Variables
@@ -160,35 +209,9 @@ npm run dev
 | `FEED_TOKEN` | Token for feed endpoint auth | No |
 | `DOMAIN` | Your domain (for HTTPS) | Production |
 
-## Project Structure
-
-```
-overseer-lite/
-├── backend/
-│   ├── main.py           # FastAPI application
-│   ├── config.py         # Configuration
-│   ├── database.py       # SQLite database
-│   ├── tmdb.py           # TMDB API client
-│   ├── rss.py            # Feed generation
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── lib/          # Stores and API client
-│   │   └── routes/       # Svelte pages
-│   ├── package.json
-│   └── Dockerfile
-├── caddy/
-│   ├── Caddyfile         # Production config (auto HTTPS)
-│   └── Caddyfile.dev.json # Development config
-├── docker-compose.yml         # Development
-├── docker-compose.prod.yml    # Production with HTTPS
-└── .env.example
-```
-
 ## Feed Format Details
 
-### Radarr JSON Format (StevenLu Custom)
+### Radarr JSON (StevenLu Custom)
 ```json
 [
   {"title": "Movie Name (2023)", "imdb_id": "tt1234567"},
@@ -196,7 +219,7 @@ overseer-lite/
 ]
 ```
 
-### Sonarr JSON Format (Custom Lists)
+### Sonarr JSON (Custom Lists)
 ```json
 [
   {"tvdbId": "75837"},

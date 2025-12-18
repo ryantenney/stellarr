@@ -69,6 +69,21 @@
 		navigator.clipboard.writeText(url);
 		addToast('URL copied to clipboard', 'success');
 	}
+
+	function getMissingIdWarning(item) {
+		if (item.media_type === 'movie' && !item.imdb_id) {
+			return 'Missing IMDB ID - will not appear in Radarr feed';
+		}
+		if (item.media_type === 'tv' && !item.tvdb_id) {
+			return 'Missing TVDB ID - will not appear in Sonarr feed';
+		}
+		return null;
+	}
+
+	$: itemsWithMissingIds = requests.filter(r =>
+		(r.media_type === 'movie' && !r.imdb_id) ||
+		(r.media_type === 'tv' && !r.tvdb_id)
+	);
 </script>
 
 {#if $authenticated}
@@ -79,6 +94,12 @@
 				Feed URLs
 			</button>
 		</div>
+
+		{#if itemsWithMissingIds.length > 0}
+			<div class="warning-banner">
+				<strong>Warning:</strong> {itemsWithMissingIds.length} item{itemsWithMissingIds.length > 1 ? 's' : ''} missing external IDs and won't appear in Sonarr/Radarr feeds.
+			</div>
+		{/if}
 
 		<div class="filter-buttons">
 			<button
@@ -111,10 +132,13 @@
 		{:else}
 			<div class="requests-grid">
 				{#each requests as item (item.id)}
-					<div class="request-card">
+					<div class="request-card" class:has-warning={getMissingIdWarning(item)}>
 						<div class="poster">
 							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
 							<div class="media-type-badge">{item.media_type === 'tv' ? 'TV' : 'Movie'}</div>
+							{#if getMissingIdWarning(item)}
+								<div class="warning-badge" title={getMissingIdWarning(item)}>!</div>
+							{/if}
 						</div>
 						<div class="info">
 							<h3 title={item.title}>{item.title}</h3>
@@ -246,6 +270,16 @@
 		background: var(--accent-hover);
 	}
 
+	.warning-banner {
+		background: rgba(245, 158, 11, 0.15);
+		border: 1px solid var(--warning);
+		color: var(--warning);
+		padding: 0.75rem 1rem;
+		border-radius: 0.5rem;
+		margin-bottom: 1.5rem;
+		font-size: 0.9rem;
+	}
+
 	.filter-buttons {
 		display: flex;
 		gap: 0.5rem;
@@ -326,6 +360,27 @@
 		border-radius: 0.25rem;
 		font-size: 0.75rem;
 		font-weight: 600;
+	}
+
+	.warning-badge {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		background: var(--warning);
+		color: black;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 700;
+		font-size: 1rem;
+		cursor: help;
+	}
+
+	.request-card.has-warning {
+		border: 1px solid var(--warning);
 	}
 
 	.info {

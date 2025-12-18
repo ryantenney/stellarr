@@ -1,0 +1,23 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project settings
+project_name = "overseer-lite"
+environment  = "prod"
+
+# Domain configuration
+domain_name    = "overseer.example.com"
+hosted_zone_id = "Z1234567890ABC"  # Your Route53 hosted zone ID
+
+# Application secrets (use environment variables or secrets management in CI/CD)
+# tmdb_api_key       = "your-tmdb-api-key"
+# preshared_password = "your-password"
+# feed_token         = "your-feed-token"
+
+# Aurora Serverless scaling
+db_min_capacity = 0.5   # Minimum ACUs (can scale to 0 with Aurora Serverless v2)
+db_max_capacity = 2     # Maximum ACUs
+
+# Lambda configuration
+lambda_memory  = 512    # MB
+lambda_timeout = 30     # seconds
