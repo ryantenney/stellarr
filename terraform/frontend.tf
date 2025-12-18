@@ -102,6 +102,7 @@ resource "aws_cloudfront_distribution" "main" {
   default_root_object = "index.html"
   aliases             = [var.domain_name]
   price_class         = "PriceClass_100"
+  web_acl_id          = var.enable_waf ? aws_wafv2_web_acl.main[0].arn : null
 
   # Frontend origin (S3)
   origin {

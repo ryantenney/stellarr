@@ -68,3 +68,21 @@ variable "lambda_timeout" {
   type        = number
   default     = 30
 }
+
+variable "enable_waf" {
+  description = "Enable AWS WAF for rate limiting and threat protection"
+  type        = bool
+  default     = false
+}
+
+variable "waf_rate_limit" {
+  description = "Maximum requests per 5-minute window per IP (WAF rate limiting)"
+  type        = number
+  default     = 100
+}
+
+variable "waf_auth_rate_limit" {
+  description = "Maximum auth requests per 5-minute window per IP"
+  type        = number
+  default     = 10
+}
