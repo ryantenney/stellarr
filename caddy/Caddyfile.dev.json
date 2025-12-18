@@ -1,0 +1,33 @@
+{
+	"admin": {
+		"disabled": true
+	},
+	"apps": {
+		"http": {
+			"servers": {
+				"srv0": {
+					"listen": [":80"],
+					"routes": [
+						{
+							"handle": [
+								{
+									"handler": "reverse_proxy",
+									"upstreams": [{"dial": "backend:8000"}]
+								}
+							],
+							"match": [{"path": ["/api/*", "/rss/*", "/list/*"]}]
+						},
+						{
+							"handle": [
+								{
+									"handler": "reverse_proxy",
+									"upstreams": [{"dial": "frontend:80"}]
+								}
+							]
+						}
+					]
+				}
+			}
+		}
+	}
+}

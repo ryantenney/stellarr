@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     tmdb_api_key: str = ""
     tmdb_base_url: str = "https://api.themoviedb.org/3"
     database_path: str = "/app/data/overseer.db"
+    feed_token: str = ""  # Optional token for RSS/list endpoint protection
 
     class Config:
         env_file = ".env"

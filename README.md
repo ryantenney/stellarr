@@ -1,23 +1,24 @@
 # Overseer Lite
 
-A lightweight media request system that generates RSS feeds compatible with Sonarr and Radarr. Users can search for TV shows and movies via TMDB and add them to request lists, which are then exposed as RSS feeds.
+A lightweight media request system that generates feeds compatible with Sonarr and Radarr. Users can search for TV shows and movies via TMDB and add them to request lists, which are exposed as import list endpoints.
 
 ## Features
 
-- **Simple Authentication**: Preshared password protection
+- **Simple Authentication**: Preshared password protection for the web UI
 - **TMDB Integration**: Search movies and TV shows using The Movie Database
-- **RSS Feeds**: Sonarr and Radarr compatible RSS feeds for automated media acquisition
+- **Sonarr/Radarr Import Lists**: Native JSON formats for direct import
+- **Feed Token Protection**: Optional token-based auth for feed endpoints
 - **Modern UI**: Svelte-based responsive frontend
-- **Docker Ready**: Full Docker Compose setup with optional SSL
+- **Docker Ready**: Full Docker Compose setup with automatic HTTPS via Caddy
 
 ## Architecture
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Browser   │────▶│    Nginx    │────▶│  Frontend   │
+│   Browser   │────▶│    Caddy    │────▶│  Frontend   │
 │             │     │  (Reverse   │     │  (Svelte)   │
-└─────────────┘     │   Proxy)    │     └─────────────┘
-                    │             │
+└─────────────┘     │   Proxy +   │     └─────────────┘
+                    │   HTTPS)    │
                     │             │     ┌─────────────┐
                     │             │────▶│   Backend   │
                     └─────────────┘     │  (FastAPI)  │
@@ -54,45 +55,57 @@ A lightweight media request system that generates RSS feeds compatible with Sona
    APP_SECRET_KEY=your-random-secret-key
    PRESHARED_PASSWORD=your-password
    TMDB_API_KEY=your-tmdb-api-key
-   DOMAIN=your-domain.com
-   EMAIL=your-email@example.com
+   FEED_TOKEN=your-feed-token      # Optional: protects feed endpoints
+   DOMAIN=your-domain.com          # For production with HTTPS
    ```
 
 4. Start the application:
    ```bash
-   # Without SSL (development/local)
+   # Development (HTTP only)
    docker compose up -d
 
-   # With SSL (production)
-   ./init-letsencrypt.sh
-   docker compose -f docker-compose.ssl.yml up -d
+   # Production (automatic HTTPS via Caddy)
+   docker compose -f docker-compose.prod.yml up -d
    ```
 
-5. Access the application at `http://localhost` (or `https://your-domain.com` with SSL)
+5. Access the application at `http://localhost` (or `https://your-domain.com` in production)
 
-## RSS Feeds
+## Import Lists for Sonarr/Radarr
 
-Once you've added media requests, the following RSS feeds are available:
+The recommended endpoints use native JSON formats supported by Sonarr and Radarr:
 
-| Feed | URL | Compatible With |
-|------|-----|-----------------|
-| Movies | `/rss/movies` | Radarr |
-| TV Shows | `/rss/tv` | Sonarr |
-| All | `/rss/all` | Both |
+### Radarr (Movies)
 
-### Configuring Sonarr
+| Endpoint | Format | Description |
+|----------|--------|-------------|
+| `/list/radarr` | JSON | **Recommended** - StevenLu Custom format with IMDB IDs |
+| `/rss/movies` | RSS | Alternative RSS format |
 
-1. Go to Settings → Import Lists
-2. Add a new RSS List
-3. Enter the TV RSS URL: `https://your-domain.com/rss/tv`
-4. Configure your preferred settings
+**Setup in Radarr:**
+1. Go to Settings → Import Lists → Add
+2. Select "Custom Lists" → "StevenLu Custom"
+3. Enter URL: `https://your-domain.com/list/radarr?token=YOUR_TOKEN`
 
-### Configuring Radarr
+### Sonarr (TV Shows)
 
-1. Go to Settings → Import Lists
-2. Add a new RSS List
-3. Enter the Movies RSS URL: `https://your-domain.com/rss/movies`
-4. Configure your preferred settings
+| Endpoint | Format | Description |
+|----------|--------|-------------|
+| `/list/sonarr` | JSON | **Recommended** - Custom List format with TVDB IDs |
+| `/rss/tv` | RSS | Alternative RSS format |
+
+**Setup in Sonarr:**
+1. Go to Settings → Import Lists → Add
+2. Select "Custom Lists"
+3. Enter URL: `https://your-domain.com/list/sonarr?token=YOUR_TOKEN`
+
+### Feed Token
+
+If `FEED_TOKEN` is set in your environment, all feed endpoints require authentication:
+```
+/list/radarr?token=YOUR_FEED_TOKEN
+/list/sonarr?token=YOUR_FEED_TOKEN
+/rss/movies?token=YOUR_FEED_TOKEN
+```
 
 ## API Endpoints
 
@@ -104,7 +117,18 @@ Once you've added media requests, the following RSS feeds are available:
 | `/api/request` | POST | Add a request |
 | `/api/request/{type}/{id}` | DELETE | Remove a request |
 | `/api/requests` | GET | List all requests |
+| `/api/feeds` | GET | Get feed URLs and info |
 | `/api/health` | GET | Health check |
+
+### Import List Endpoints
+
+| Endpoint | Format | For |
+|----------|--------|-----|
+| `/list/radarr` | JSON | Radarr StevenLu Custom |
+| `/list/sonarr` | JSON | Sonarr Custom Lists |
+| `/rss/movies` | RSS | Radarr RSS List |
+| `/rss/tv` | RSS | Generic TV RSS |
+| `/rss/all` | RSS | Combined RSS |
 
 ## Development
 
@@ -128,14 +152,13 @@ npm run dev
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `APP_SECRET_KEY` | Application secret key | `change-me-in-production` |
-| `PRESHARED_PASSWORD` | User access password | `changeme` |
-| `TMDB_API_KEY` | TMDB API key | Required |
-| `DOMAIN` | Your domain (for SSL) | Required for SSL |
-| `EMAIL` | Email for Let's Encrypt | Required for SSL |
-| `LETSENCRYPT_ENV` | `staging` or `production` | `production` |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `APP_SECRET_KEY` | Application secret key | Yes |
+| `PRESHARED_PASSWORD` | User access password | Yes |
+| `TMDB_API_KEY` | TMDB API key | Yes |
+| `FEED_TOKEN` | Token for feed endpoint auth | No |
+| `DOMAIN` | Your domain (for HTTPS) | Production |
 
 ## Project Structure
 
@@ -146,8 +169,8 @@ overseer-lite/
 │   ├── config.py         # Configuration
 │   ├── database.py       # SQLite database
 │   ├── tmdb.py           # TMDB API client
-│   ├── rss.py            # RSS feed generation
-│   ├── requirements.txt  # Python dependencies
+│   ├── rss.py            # Feed generation
+│   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
@@ -155,14 +178,36 @@ overseer-lite/
 │   │   └── routes/       # Svelte pages
 │   ├── package.json
 │   └── Dockerfile
-├── nginx/
-│   ├── nginx.conf        # Development config
-│   └── nginx-ssl.conf    # Production SSL config
-├── docker-compose.yml         # Development compose
-├── docker-compose.ssl.yml     # Production compose with SSL
-├── init-letsencrypt.sh        # SSL certificate setup
+├── caddy/
+│   ├── Caddyfile         # Production config (auto HTTPS)
+│   └── Caddyfile.dev.json # Development config
+├── docker-compose.yml         # Development
+├── docker-compose.prod.yml    # Production with HTTPS
 └── .env.example
 ```
+
+## Feed Format Details
+
+### Radarr JSON Format (StevenLu Custom)
+```json
+[
+  {"title": "Movie Name (2023)", "imdb_id": "tt1234567"},
+  {"title": "Another Movie (2024)", "imdb_id": "tt7654321"}
+]
+```
+
+### Sonarr JSON Format (Custom Lists)
+```json
+[
+  {"tvdbId": "75837"},
+  {"tvdbId": "77847"}
+]
+```
+
+## Sources
+
+- [Radarr StevenLu Custom Lists](https://wiki.servarr.com/radarr/supported)
+- [Sonarr Custom Lists PR #5160](https://github.com/Sonarr/Sonarr/pull/5160)
 
 ## License
 

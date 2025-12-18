@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
@@ -9,6 +7,7 @@ services:
       - APP_SECRET_KEY=${APP_SECRET_KEY:-change-me-in-production}
       - PRESHARED_PASSWORD=${PRESHARED_PASSWORD:-changeme}
       - TMDB_API_KEY=${TMDB_API_KEY}
+      - FEED_TOKEN=${FEED_TOKEN:-}
       - DATABASE_PATH=/app/data/overseer.db
     volumes:
       - ./data:/app/data
@@ -29,37 +28,29 @@ services:
     depends_on:
       - backend
 
-  nginx:
-    image: nginx:alpine
-    container_name: overseer-nginx
+  caddy:
+    image: caddy:2-alpine
+    container_name: overseer-caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-    volumes:
-      - ./nginx/nginx-ssl.conf:/etc/nginx/nginx.conf.template:ro
-      - ./certbot/conf:/etc/letsencrypt:ro
-      - ./certbot/www:/var/www/certbot:ro
     environment:
       - DOMAIN=${DOMAIN}
-    command: /bin/sh -c "envsubst '$$DOMAIN' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     networks:
       - overseer-network
     depends_on:
       - backend
       - frontend
 
-  certbot:
-    image: certbot/certbot
-    container_name: overseer-certbot
-    restart: unless-stopped
-    volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    networks:
-      - overseer-network
-
 networks:
   overseer-network:
     driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

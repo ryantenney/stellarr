@@ -52,3 +52,7 @@ export async function removeRequest(tmdbId, mediaType) {
 		method: 'DELETE'
 	});
 }
+
+export async function getFeedInfo() {
+	return request('/feeds');
+}

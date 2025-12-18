@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
@@ -9,6 +7,7 @@ services:
       - APP_SECRET_KEY=${APP_SECRET_KEY:-change-me-in-production}
       - PRESHARED_PASSWORD=${PRESHARED_PASSWORD:-changeme}
       - TMDB_API_KEY=${TMDB_API_KEY}
+      - FEED_TOKEN=${FEED_TOKEN:-}
       - DATABASE_PATH=/app/data/overseer.db
     volumes:
       - ./data:/app/data
@@ -29,14 +28,15 @@ services:
     depends_on:
       - backend
 
-  nginx:
-    image: nginx:alpine
-    container_name: overseer-nginx
+  caddy:
+    image: caddy:2-alpine
+    container_name: overseer-caddy
     restart: unless-stopped
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./caddy/Caddyfile.dev.json:/etc/caddy/caddy.json:ro
+    command: caddy run --config /etc/caddy/caddy.json
     networks:
       - overseer-network
     depends_on:

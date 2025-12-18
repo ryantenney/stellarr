@@ -1,0 +1,25 @@
+{$DOMAIN} {
+	# API and feed endpoints -> backend
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /rss/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /list/* {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else -> frontend
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+}

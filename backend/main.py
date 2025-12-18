@@ -1,6 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import secrets
@@ -8,11 +7,16 @@ import secrets
 from config import get_settings
 from database import init_db, add_request, remove_request, get_all_requests, is_requested
 from tmdb import tmdb_client
-from rss import generate_movie_rss, generate_tv_rss, generate_combined_rss
+from rss import (
+    generate_movie_rss,
+    generate_tv_rss,
+    generate_combined_rss,
+    generate_radarr_json,
+    generate_sonarr_json,
+)
 
 
 settings = get_settings()
-security = HTTPBasic()
 
 
 @asynccontextmanager
@@ -39,22 +43,27 @@ app.add_middleware(
 )
 
 
-# --- Auth ---
+# --- Auth Helpers ---
 
-def verify_password(credentials: HTTPBasicCredentials = Depends(security)):
-    """Verify the preshared password."""
-    correct_password = secrets.compare_digest(
-        credentials.password.encode("utf8"),
-        settings.preshared_password.encode("utf8")
-    )
-    if not correct_password:
+def verify_feed_token(token: str | None = Query(None, alias="token")):
+    """Verify the feed token for RSS/list endpoints."""
+    if not settings.feed_token:
+        # No token configured, allow access
+        return True
+
+    if not token:
         raise HTTPException(
             status_code=401,
-            detail="Invalid password",
-            headers={"WWW-Authenticate": "Basic"},
+            detail="Feed token required. Add ?token=YOUR_TOKEN to the URL."
         )
+
+    if not secrets.compare_digest(token, settings.feed_token):
+        raise HTTPException(status_code=401, detail="Invalid feed token")
+
     return True
 
+
+# --- Auth ---
 
 class PasswordCheck(BaseModel):
     password: str
@@ -225,30 +234,118 @@ async def get_trending(media_type: str = "all"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- RSS Feeds ---
+# --- RSS Feeds (protected by token) ---
 
 @app.get("/rss/movies")
-async def rss_movies(request: Request):
-    """RSS feed for movie requests (Radarr compatible)."""
+async def rss_movies(request: Request, _: bool = Depends(verify_feed_token)):
+    """
+    RSS feed for movie requests (Radarr compatible).
+
+    Add ?token=YOUR_FEED_TOKEN if FEED_TOKEN is configured.
+    """
     base_url = str(request.base_url).rstrip("/")
     xml = await generate_movie_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
 
 @app.get("/rss/tv")
-async def rss_tv(request: Request):
-    """RSS feed for TV show requests (Sonarr compatible)."""
+async def rss_tv(request: Request, _: bool = Depends(verify_feed_token)):
+    """
+    RSS feed for TV show requests.
+
+    NOTE: Sonarr does not support RSS import lists natively.
+    Consider using /list/radarr for Radarr's StevenLu Custom format.
+    """
     base_url = str(request.base_url).rstrip("/")
     xml = await generate_tv_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
 
 @app.get("/rss/all")
-async def rss_all(request: Request):
+async def rss_all(request: Request, _: bool = Depends(verify_feed_token)):
     """Combined RSS feed for all requests."""
     base_url = str(request.base_url).rstrip("/")
     xml = await generate_combined_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
+
+
+# --- JSON Lists (for Radarr StevenLu Custom format) ---
+
+@app.get("/list/radarr")
+async def list_radarr(_: bool = Depends(verify_feed_token)):
+    """
+    Radarr StevenLu Custom list format (JSON).
+
+    This is the RECOMMENDED format for Radarr import lists.
+    Uses IMDB IDs for accurate matching.
+
+    In Radarr: Settings -> Import Lists -> Add -> Custom Lists -> StevenLu Custom
+    URL: https://your-domain.com/list/radarr?token=YOUR_TOKEN
+    """
+    return await generate_radarr_json()
+
+
+@app.get("/list/sonarr")
+async def list_sonarr(_: bool = Depends(verify_feed_token)):
+    """
+    Sonarr Custom List format (JSON).
+
+    Uses TVDB IDs for accurate matching.
+    See: https://github.com/Sonarr/Sonarr/pull/5160
+
+    In Sonarr: Settings -> Import Lists -> Add -> Custom Lists
+    URL: https://your-domain.com/list/sonarr?token=YOUR_TOKEN
+    """
+    return await generate_sonarr_json()
+
+
+# --- Feed Info Endpoint ---
+
+@app.get("/api/feeds")
+async def get_feed_info(request: Request):
+    """Get information about available feeds and their URLs."""
+    base_url = str(request.base_url).rstrip("/")
+    token_required = bool(settings.feed_token)
+    token_param = "?token=YOUR_FEED_TOKEN" if token_required else ""
+
+    return {
+        "token_required": token_required,
+        "feeds": {
+            "radarr": {
+                "name": "Radarr (Movies)",
+                "description": "StevenLu Custom JSON format - RECOMMENDED for Radarr",
+                "url": f"{base_url}/list/radarr{token_param}",
+                "format": "json",
+                "setup": "Settings -> Import Lists -> Custom Lists -> StevenLu Custom"
+            },
+            "radarr_rss": {
+                "name": "Radarr RSS (Movies)",
+                "description": "RSS format with IMDB IDs",
+                "url": f"{base_url}/rss/movies{token_param}",
+                "format": "rss",
+                "setup": "Settings -> Import Lists -> Custom Lists -> RSS List"
+            },
+            "sonarr": {
+                "name": "Sonarr (TV Shows)",
+                "description": "Custom List JSON format with TVDB IDs - RECOMMENDED for Sonarr",
+                "url": f"{base_url}/list/sonarr{token_param}",
+                "format": "json",
+                "setup": "Settings -> Import Lists -> Add -> Custom Lists"
+            },
+            "tv_rss": {
+                "name": "TV Shows RSS",
+                "description": "RSS format for TV shows",
+                "url": f"{base_url}/rss/tv{token_param}",
+                "format": "rss"
+            },
+            "all_rss": {
+                "name": "All Media RSS",
+                "description": "Combined RSS feed for all requests",
+                "url": f"{base_url}/rss/all{token_param}",
+                "format": "rss"
+            }
+        }
+    }
 
 
 # --- Health Check ---
