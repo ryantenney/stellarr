@@ -5,11 +5,17 @@ resource "random_password" "db_password" {
   special = false
 }
 
+# Find latest available Aurora PostgreSQL version
+data "aws_rds_engine_version" "postgresql" {
+  engine             = "aurora-postgresql"
+  preferred_versions = ["16.4", "16.3", "16.2", "16.1", "15.7", "15.6"]
+}
+
 resource "aws_rds_cluster" "main" {
   cluster_identifier = "${local.name_prefix}-aurora"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
-  engine_version     = "15.4"
+  engine_version     = data.aws_rds_engine_version.postgresql.version
   database_name      = "overseer"
   master_username    = "overseer"
   master_password    = random_password.db_password.result
