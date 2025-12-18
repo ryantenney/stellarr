@@ -12,11 +12,16 @@ terraform {
     }
   }
 
-  # Uncomment and configure for remote state
+  # Remote state storage (recommended for production)
+  # 1. First run: cd backend-setup && terraform init && terraform apply
+  # 2. Then uncomment and configure this block:
+  #
   # backend "s3" {
-  #   bucket = "your-terraform-state-bucket"
-  #   key    = "overseer-lite/terraform.tfstate"
-  #   region = "us-east-1"
+  #   bucket         = "overseer-lite-terraform-state"
+  #   key            = "overseer-lite/terraform.tfstate"
+  #   region         = "us-east-1"
+  #   encrypt        = true
+  #   dynamodb_table = "overseer-lite-terraform-locks"
   # }
 }
 
