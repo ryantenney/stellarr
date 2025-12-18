@@ -118,6 +118,22 @@ app.add_middleware(
 )
 
 
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    print(f"DEBUG: REQUEST START - {request.method} {request.url.path}", flush=True)
+    try:
+        response = await call_next(request)
+        duration = time.time() - start_time
+        print(f"DEBUG: REQUEST END - {request.method} {request.url.path} - Status: {response.status_code} - Duration: {duration:.2f}s", flush=True)
+        return response
+    except Exception as e:
+        duration = time.time() - start_time
+        print(f"DEBUG: REQUEST ERROR - {request.method} {request.url.path} - Error: {type(e).__name__}: {e} - Duration: {duration:.2f}s", flush=True)
+        raise
+
+
 # --- Auth Helpers ---
 
 def verify_feed_token(token: str | None = Query(None, alias="token")):
