@@ -58,6 +58,14 @@ resource "aws_security_group" "lambda" {
   name_prefix = "${local.name_prefix}-lambda-"
   vpc_id      = aws_vpc.main.id
 
+  # Allow inbound HTTPS for VPC endpoints
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    self        = true
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
