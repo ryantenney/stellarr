@@ -29,7 +29,7 @@ resource "aws_rds_cluster" "main" {
   cluster_identifier      = "${local.name_prefix}-aurora"
   engine                  = "aurora-postgresql"
   engine_mode             = "provisioned"
-  engine_version          = "15.4"
+  engine_version          = "16.4"
   database_name           = "overseer"
   master_username         = "overseer"
   master_password         = random_password.db_password.result
