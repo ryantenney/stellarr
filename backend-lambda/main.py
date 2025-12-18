@@ -23,6 +23,16 @@ from rss import (
 
 settings = get_settings()
 
+# Initialize database once at module load (not on every request)
+_db_initialized = False
+
+def ensure_db_initialized():
+    """Initialize database tables once per Lambda instance."""
+    global _db_initialized
+    if not _db_initialized:
+        init_db()
+        _db_initialized = True
+
 # Session duration: 30 days in seconds
 SESSION_DURATION_SECONDS = 30 * 24 * 60 * 60
 
@@ -74,8 +84,7 @@ def verify_session_token(authorization: str | None = Header(None, alias="Authori
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup."""
-    init_db()
+    """Lifespan handler - DB init moved to module level for Lambda."""
     yield
 
 
@@ -381,5 +390,8 @@ def health_check():
     return {"status": "healthy", "service": "overseer-lite"}
 
 
-# Lambda handler
-handler = Mangum(app, lifespan="on")
+# Initialize database once per Lambda instance (at module load, not per request)
+ensure_db_initialized()
+
+# Lambda handler - lifespan="off" since we handle init at module level
+handler = Mangum(app, lifespan="off")
