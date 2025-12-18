@@ -82,7 +82,12 @@ variable "waf_rate_limit" {
 }
 
 variable "waf_auth_rate_limit" {
-  description = "Maximum auth requests per 5-minute window per IP"
+  description = "Maximum auth requests per 5-minute window per IP (minimum 100)"
   type        = number
-  default     = 10
+  default     = 100  # AWS WAF minimum is 100
+
+  validation {
+    condition     = var.waf_auth_rate_limit >= 100
+    error_message = "AWS WAF rate limit minimum is 100 requests per 5-minute window."
+  }
 }

@@ -14,12 +14,13 @@ resource "aws_wafv2_web_acl" "main" {
   }
 
   # Rule 1: Rate limit auth endpoint (prevent brute force)
+  # Note: AWS WAF minimum rate is 100 requests per 5 minutes
   rule {
     name     = "RateLimitAuth"
     priority = 1
 
-    override_action {
-      none {}
+    action {
+      block {}
     }
 
     statement {
@@ -57,8 +58,8 @@ resource "aws_wafv2_web_acl" "main" {
     name     = "RateLimitOverall"
     priority = 2
 
-    override_action {
-      none {}
+    action {
+      block {}
     }
 
     statement {
