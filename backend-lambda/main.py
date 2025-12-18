@@ -1,9 +1,13 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from mangum import Mangum
 import secrets
+import hmac
+import hashlib
+import base64
+import time
 
 from config import get_settings
 from database import init_db, add_request, remove_request, get_all_requests, is_requested
@@ -18,6 +22,54 @@ from rss import (
 
 
 settings = get_settings()
+
+# Session duration: 30 days in seconds
+SESSION_DURATION_SECONDS = 30 * 24 * 60 * 60
+
+
+def create_session_token() -> str:
+    """Create a signed session token with timestamp."""
+    timestamp = str(int(time.time()))
+    signature = hmac.new(
+        settings.app_secret_key.encode(),
+        timestamp.encode(),
+        hashlib.sha256
+    ).digest()
+    sig_b64 = base64.urlsafe_b64encode(signature).decode().rstrip("=")
+    return f"{timestamp}.{sig_b64}"
+
+
+def verify_session_token(authorization: str | None = Header(None, alias="Authorization")) -> bool:
+    """Verify the session token from Authorization header."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    token = parts[1]
+
+    try:
+        timestamp_str, sig_b64 = token.split(".", 1)
+        timestamp = int(timestamp_str)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+
+    if time.time() - timestamp > SESSION_DURATION_SECONDS:
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    expected_sig = hmac.new(
+        settings.app_secret_key.encode(),
+        timestamp_str.encode(),
+        hashlib.sha256
+    ).digest()
+    expected_b64 = base64.urlsafe_b64encode(expected_sig).decode().rstrip("=")
+
+    if not secrets.compare_digest(sig_b64, expected_b64):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return True
 
 
 @asynccontextmanager
@@ -71,9 +123,10 @@ class PasswordCheck(BaseModel):
 
 @app.post("/api/auth/verify")
 def verify_auth(data: PasswordCheck):
-    """Verify the preshared password."""
+    """Verify the preshared password and return a session token."""
     if secrets.compare_digest(data.password, settings.preshared_password):
-        return {"valid": True}
+        token = create_session_token()
+        return {"valid": True, "token": token}
     raise HTTPException(status_code=401, detail="Invalid password")
 
 
@@ -86,7 +139,7 @@ class SearchQuery(BaseModel):
 
 
 @app.post("/api/search")
-async def search(data: SearchQuery):
+async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
     """Search TMDB for movies and TV shows."""
     try:
         if data.media_type == "movie":
@@ -142,7 +195,7 @@ class MediaRequest(BaseModel):
 
 
 @app.post("/api/request")
-async def create_request(data: MediaRequest):
+async def create_request(data: MediaRequest, _: bool = Depends(verify_session_token)):
     """Add a media item to the request list."""
     try:
         if data.media_type == "movie":
@@ -178,7 +231,7 @@ async def create_request(data: MediaRequest):
 
 
 @app.delete("/api/request/{media_type}/{tmdb_id}")
-def delete_request(media_type: str, tmdb_id: int):
+def delete_request(media_type: str, tmdb_id: int, _: bool = Depends(verify_session_token)):
     """Remove a media item from the request list."""
     success = remove_request(tmdb_id, media_type)
     if success:
@@ -187,7 +240,7 @@ def delete_request(media_type: str, tmdb_id: int):
 
 
 @app.get("/api/requests")
-def list_requests(media_type: str | None = None):
+def list_requests(media_type: str | None = None, _: bool = Depends(verify_session_token)):
     """Get all requests, optionally filtered by media type."""
     requests = get_all_requests(media_type)
     return {"requests": requests}
@@ -196,7 +249,7 @@ def list_requests(media_type: str | None = None):
 # --- Trending/Popular ---
 
 @app.get("/api/trending")
-async def get_trending(media_type: str = "all"):
+async def get_trending(media_type: str = "all", _: bool = Depends(verify_session_token)):
     """Get trending movies/TV shows."""
     try:
         results = await tmdb_client.get_trending(media_type)

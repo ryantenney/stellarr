@@ -1,6 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
-	import { authenticated, loading, addToast } from '$lib/stores.js';
+	import { authenticated, loading, addToast, setAuthenticated } from '$lib/stores.js';
 	import { verifyPassword, search, getTrending, addRequest } from '$lib/api.js';
 
 	let password = '';
@@ -19,8 +19,8 @@
 	async function handleLogin() {
 		try {
 			$loading = true;
-			await verifyPassword(password);
-			$authenticated = true;
+			const response = await verifyPassword(password);
+			setAuthenticated(response.token);
 			addToast('Welcome to Overseer Lite!', 'success');
 			await loadTrending();
 		} catch (error) {

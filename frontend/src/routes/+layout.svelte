@@ -1,6 +1,5 @@
 <script>
-	import { authenticated } from '$lib/stores.js';
-	import { toasts } from '$lib/stores.js';
+	import { authenticated, logout, toasts } from '$lib/stores.js';
 </script>
 
 <svelte:head>
@@ -45,7 +44,7 @@
 				<nav>
 					<a href="/">Search</a>
 					<a href="/requests">My Requests</a>
-					<button class="logout-btn" on:click={() => authenticated.set(false)}>Logout</button>
+					<button class="logout-btn" on:click={logout}>Logout</button>
 				</nav>
 			{/if}
 		</div>

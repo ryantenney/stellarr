@@ -13,12 +13,27 @@ function isSessionValid() {
 
 	try {
 		const session = JSON.parse(authData);
-		if (!session.authenticated || !session.timestamp) return false;
+		if (!session.authenticated || !session.timestamp || !session.token) return false;
 
 		const elapsed = Date.now() - session.timestamp;
 		return elapsed < SESSION_DURATION_MS;
 	} catch {
 		return false;
+	}
+}
+
+// Get the stored session token
+export function getSessionToken() {
+	if (!browser) return null;
+
+	const authData = localStorage.getItem('auth_session');
+	if (!authData) return null;
+
+	try {
+		const session = JSON.parse(authData);
+		return session.token || null;
+	} catch {
+		return null;
 	}
 }
 
@@ -52,17 +67,22 @@ if (browser && !storedAuth) {
 	localStorage.removeItem('auth_session');
 }
 
-authenticated.subscribe((value) => {
-	if (browser) {
-		if (value) {
-			// Store auth with timestamp for expiration tracking
-			const session = { authenticated: true, timestamp: Date.now() };
-			localStorage.setItem('auth_session', JSON.stringify(session));
-		} else {
-			localStorage.removeItem('auth_session');
-		}
+// Set authenticated state with token from backend
+export function setAuthenticated(token) {
+	if (browser && token) {
+		const session = { authenticated: true, timestamp: Date.now(), token };
+		localStorage.setItem('auth_session', JSON.stringify(session));
 	}
-});
+	authenticated.set(true);
+}
+
+// Logout - clear session
+export function logout() {
+	if (browser) {
+		localStorage.removeItem('auth_session');
+	}
+	authenticated.set(false);
+}
 
 // Password store (not persisted for security)
 export const password = writable('');
