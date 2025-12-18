@@ -1,13 +1,11 @@
 import os
 import json
 import boto3
-import logging
 import time
 from functools import lru_cache
 from pydantic_settings import BaseSettings
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+print("DEBUG: config.py loading...", flush=True)
 
 
 def get_secret(secret_arn: str) -> dict:
@@ -42,32 +40,32 @@ class Settings(BaseSettings):
         # Load app config
         app_secret_arn = os.environ.get('APP_SECRET_ARN')
         if app_secret_arn:
-            logger.info(f"Loading app config from Secrets Manager: {app_secret_arn[:50]}...")
+            print(f"DEBUG: Loading app config from Secrets Manager: {app_secret_arn[:50]}...", flush=True)
             start = time.time()
             app_config = get_secret(app_secret_arn)
-            logger.info(f"App config loaded in {time.time() - start:.2f}s")
+            print(f"DEBUG: App config loaded in {time.time() - start:.2f}s", flush=True)
             self.app_secret_key = app_config.get('APP_SECRET_KEY', '')
             self.preshared_password = app_config.get('PRESHARED_PASSWORD', '')
             self.tmdb_api_key = app_config.get('TMDB_API_KEY', '')
             self.feed_token = app_config.get('FEED_TOKEN', '')
         else:
-            logger.warning("APP_SECRET_ARN not set")
+            print("DEBUG: WARNING - APP_SECRET_ARN not set", flush=True)
 
         # Load DB config
         db_secret_arn = os.environ.get('DB_SECRET_ARN')
         if db_secret_arn:
-            logger.info(f"Loading DB config from Secrets Manager: {db_secret_arn[:50]}...")
+            print(f"DEBUG: Loading DB config from Secrets Manager: {db_secret_arn[:50]}...", flush=True)
             start = time.time()
             db_config = get_secret(db_secret_arn)
-            logger.info(f"DB config loaded in {time.time() - start:.2f}s")
+            print(f"DEBUG: DB config loaded in {time.time() - start:.2f}s", flush=True)
             self.db_host = db_config.get('host', '')
             self.db_port = int(db_config.get('port', 5432))
             self.db_name = db_config.get('database', 'overseer')
             self.db_user = db_config.get('username', '')
             self.db_password = db_config.get('password', '')
-            logger.info(f"DB config: host={self.db_host}, port={self.db_port}, db={self.db_name}, user={self.db_user}")
+            print(f"DEBUG: DB config: host={self.db_host}, port={self.db_port}, db={self.db_name}, user={self.db_user}", flush=True)
         else:
-            logger.warning("DB_SECRET_ARN not set")
+            print("DEBUG: WARNING - DB_SECRET_ARN not set", flush=True)
 
     @property
     def database_url(self) -> str:

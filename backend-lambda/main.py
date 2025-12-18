@@ -10,16 +10,13 @@ import base64
 import time
 import logging
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
-logger.info("Starting main.py module load...")
+print("DEBUG: Starting main.py module load...", flush=True)
 
 from config import get_settings
-logger.info("Config module imported")
+print("DEBUG: Config module imported", flush=True)
 
 from database import init_db, add_request, remove_request, get_all_requests, is_requested
-logger.info("Database module imported")
+print("DEBUG: Database module imported", flush=True)
 from tmdb import tmdb_client
 from rss import (
     generate_movie_rss,
@@ -39,14 +36,14 @@ def ensure_db_initialized():
     """Initialize database tables once per Lambda instance."""
     global _db_initialized
     if not _db_initialized:
-        logger.info("Initializing database (first time for this Lambda instance)...")
+        print("DEBUG: Initializing database (first time for this Lambda instance)...", flush=True)
         start = time.time()
         try:
             init_db()
-            logger.info(f"Database initialized successfully in {time.time() - start:.2f}s")
+            print(f"DEBUG: Database initialized successfully in {time.time() - start:.2f}s", flush=True)
             _db_initialized = True
         except Exception as e:
-            logger.error(f"Database initialization failed after {time.time() - start:.2f}s: {type(e).__name__}: {e}")
+            print(f"DEBUG: Database initialization failed after {time.time() - start:.2f}s: {type(e).__name__}: {e}", flush=True)
             raise
 
 # Session duration: 30 days in seconds
@@ -407,9 +404,9 @@ def health_check():
 
 
 # Initialize database once per Lambda instance (at module load, not per request)
-logger.info("About to initialize database at module load time...")
+print("DEBUG: About to initialize database at module load time...", flush=True)
 ensure_db_initialized()
-logger.info("Module load complete, handler ready")
+print("DEBUG: Module load complete, handler ready", flush=True)
 
 # Lambda handler - lifespan="off" since we handle init at module level
 handler = Mangum(app, lifespan="off")
