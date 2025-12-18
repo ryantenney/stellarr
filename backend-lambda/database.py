@@ -3,6 +3,9 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 from contextlib import contextmanager
 from config import get_settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -14,12 +17,20 @@ def get_pool() -> ConnectionPool:
     """Get or create the connection pool."""
     global _pool
     if _pool is None:
-        _pool = ConnectionPool(
-            settings.database_url,
-            min_size=1,
-            max_size=5,
-            kwargs={"row_factory": dict_row}
-        )
+        logger.info(f"Creating connection pool to {settings.db_host}:{settings.db_port}/{settings.db_name}")
+        try:
+            _pool = ConnectionPool(
+                settings.database_url,
+                min_size=1,
+                max_size=5,
+                open=True,  # Open connections immediately
+                timeout=10,  # Connection timeout
+                kwargs={"row_factory": dict_row}
+            )
+            logger.info("Connection pool created successfully")
+        except Exception as e:
+            logger.error(f"Failed to create connection pool: {e}")
+            raise
     return _pool
 
 
