@@ -19,8 +19,8 @@ echo "Building Lambda deployment package using Docker..."
 TEMP_DIR=$(mktemp -d)
 mkdir -p "$TEMP_DIR/package"
 
-# Build using Docker with Lambda Python runtime
-docker run --rm \
+# Build using Docker with Lambda Python runtime (x86_64 for Lambda compatibility)
+docker run --rm --platform linux/amd64 \
     -v "$SCRIPT_DIR":/var/task \
     -v "$TEMP_DIR/package":/var/package \
     public.ecr.aws/lambda/python:3.12 \

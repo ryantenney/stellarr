@@ -83,6 +83,7 @@ resource "aws_lambda_function" "api" {
   role          = aws_iam_role.lambda.arn
   handler       = "main.handler"
   runtime       = "python3.12"
+  architectures = ["x86_64"]
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory
 
