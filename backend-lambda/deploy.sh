@@ -21,13 +21,11 @@ mkdir -p "$TEMP_DIR/package"
 
 # Build using Docker with Lambda Python runtime (x86_64 for Lambda compatibility)
 docker run --rm --platform linux/amd64 \
+    --entrypoint /bin/bash \
     -v "$SCRIPT_DIR":/var/task \
     -v "$TEMP_DIR/package":/var/package \
     public.ecr.aws/lambda/python:3.12 \
-    /bin/bash -c "
-        pip install -r /var/task/requirements.txt -t /var/package --quiet &&
-        cp /var/task/*.py /var/package/
-    "
+    -c "pip install -r /var/task/requirements.txt -t /var/package --quiet && cp /var/task/*.py /var/package/"
 
 # Create zip
 cd "$TEMP_DIR/package"
