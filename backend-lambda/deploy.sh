@@ -1,6 +1,8 @@
 #!/bin/bash
 # Lambda deployment script
 # Usage: ./deploy.sh <function-name> <s3-bucket> [region]
+#
+# Builds Lambda package using Docker to ensure Linux-compatible binaries
 
 set -e
 
@@ -8,21 +10,27 @@ FUNCTION_NAME="${1:?Error: Lambda function name required}"
 S3_BUCKET="${2:?Error: S3 bucket name required}"
 REGION="${3:-us-east-1}"
 
-echo "Building Lambda deployment package..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+echo "Building Lambda deployment package using Docker..."
 
 # Create temp directory
 TEMP_DIR=$(mktemp -d)
-PACKAGE_DIR="$TEMP_DIR/package"
-mkdir -p "$PACKAGE_DIR"
+mkdir -p "$TEMP_DIR/package"
 
-# Install dependencies
-pip3 install -r requirements.txt -t "$PACKAGE_DIR" --quiet
-
-# Copy source files
-cp *.py "$PACKAGE_DIR/"
+# Build using Docker with Lambda Python runtime
+docker run --rm \
+    -v "$SCRIPT_DIR":/var/task \
+    -v "$TEMP_DIR/package":/var/package \
+    public.ecr.aws/lambda/python:3.12 \
+    /bin/bash -c "
+        pip install -r /var/task/requirements.txt -t /var/package --quiet &&
+        cp /var/task/*.py /var/package/
+    "
 
 # Create zip
-cd "$PACKAGE_DIR"
+cd "$TEMP_DIR/package"
 zip -r "$TEMP_DIR/lambda.zip" . -q
 
 echo "Uploading to S3..."
