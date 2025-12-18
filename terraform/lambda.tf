@@ -1,5 +1,30 @@
 # Lambda function for the FastAPI backend
 
+# S3 bucket for Lambda deployment packages
+resource "aws_s3_bucket" "lambda_deployment" {
+  bucket = "${local.name_prefix}-lambda-deploy-${local.name_suffix}"
+
+  tags = {
+    Name = "${local.name_prefix}-lambda-deploy"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "lambda_deployment" {
+  bucket = aws_s3_bucket.lambda_deployment.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "lambda_deployment" {
+  bucket = aws_s3_bucket.lambda_deployment.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 # IAM role for Lambda
 resource "aws_iam_role" "lambda" {
   name = "${local.name_prefix}-lambda-role"

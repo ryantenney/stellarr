@@ -81,7 +81,7 @@ aws cloudfront create-invalidation \
 cd ../backend-lambda
 ./deploy.sh \
   $(terraform -chdir=../terraform output -raw lambda_function_name) \
-  your-deployment-bucket
+  $(terraform -chdir=../terraform output -raw lambda_deployment_bucket)
 ```
 
 ## Variables Reference
@@ -156,10 +156,11 @@ WAF provides:
 
 | Output | Description |
 |--------|-------------|
-| `cloudfront_domain` | CloudFront distribution domain |
+| `website_url` | Full URL of the application |
 | `cloudfront_distribution_id` | For cache invalidation |
 | `frontend_bucket_name` | S3 bucket for frontend files |
 | `lambda_function_name` | Lambda function name |
+| `lambda_deployment_bucket` | S3 bucket for Lambda code uploads |
 | `lambda_function_url` | Direct Lambda URL (internal) |
 
 ## Cost Estimate

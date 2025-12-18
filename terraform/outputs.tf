@@ -18,6 +18,11 @@ output "lambda_function_name" {
   value       = aws_lambda_function.api.function_name
 }
 
+output "lambda_deployment_bucket" {
+  description = "S3 bucket for Lambda deployment packages"
+  value       = aws_s3_bucket.lambda_deployment.id
+}
+
 output "lambda_function_url" {
   description = "Lambda function URL"
   value       = aws_lambda_function_url.api.function_url
