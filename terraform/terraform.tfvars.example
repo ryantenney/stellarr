@@ -21,3 +21,8 @@ db_max_capacity = 2     # Maximum ACUs
 # Lambda configuration
 lambda_memory  = 512    # MB
 lambda_timeout = 30     # seconds
+
+# AWS WAF (optional - adds ~$6-8/month)
+enable_waf          = false
+waf_rate_limit      = 100   # Requests per 5 min per IP (min: 100)
+waf_auth_rate_limit = 100   # Auth requests per 5 min per IP (min: 100)
