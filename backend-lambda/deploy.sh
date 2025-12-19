@@ -30,8 +30,7 @@ docker run --rm --platform linux/arm64 \
         pip install -r /var/task/requirements.txt -t /var/package --quiet && \
         cp /var/task/*.py /var/package/ && \
         python -m compileall -b -q /var/package && \
-        find /var/package -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true && \
-        find /var/package -name '*.py' -type f -delete
+        find /var/package -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
     "
 
 # Create zip
