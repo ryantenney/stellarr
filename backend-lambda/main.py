@@ -21,14 +21,31 @@ from database import (
     check_rate_limit, record_failed_attempt, clear_rate_limit
 )
 print("DEBUG: Database module imported", flush=True)
-from tmdb import tmdb_client
-from rss import (
-    generate_movie_rss,
-    generate_tv_rss,
-    generate_combined_rss,
-    generate_radarr_json,
-    generate_sonarr_json,
-)
+
+# Lazy imports for cold start optimization
+# These modules are only loaded when their endpoints are first called
+_tmdb_client = None
+_rss_module = None
+
+
+def get_tmdb_client():
+    """Lazy load TMDB client on first use."""
+    global _tmdb_client
+    if _tmdb_client is None:
+        print("DEBUG: Lazy loading TMDB client...", flush=True)
+        from tmdb import tmdb_client
+        _tmdb_client = tmdb_client
+    return _tmdb_client
+
+
+def get_rss_module():
+    """Lazy load RSS module on first use."""
+    global _rss_module
+    if _rss_module is None:
+        print("DEBUG: Lazy loading RSS module...", flush=True)
+        import rss
+        _rss_module = rss
+    return _rss_module
 
 
 settings = get_settings()
@@ -283,13 +300,14 @@ class SearchQuery(BaseModel):
 @app.post("/api/search")
 async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
     """Search TMDB for movies and TV shows."""
+    tmdb = get_tmdb_client()
     try:
         if data.media_type == "movie":
-            results = await tmdb_client.search_movie(data.query, data.page)
+            results = await tmdb.search_movie(data.query, data.page)
         elif data.media_type == "tv":
-            results = await tmdb_client.search_tv(data.query, data.page)
+            results = await tmdb.search_tv(data.query, data.page)
         else:
-            results = await tmdb_client.search_multi(data.query, data.page)
+            results = await tmdb.search_multi(data.query, data.page)
 
         filtered_results = []
         for item in results.get("results", []):
@@ -340,15 +358,16 @@ class MediaRequest(BaseModel):
 @app.post("/api/request")
 async def create_request(data: MediaRequest, _: bool = Depends(verify_session_token)):
     """Add a media item to the request list."""
+    tmdb = get_tmdb_client()
     try:
         if data.media_type == "movie":
-            details = await tmdb_client.get_movie(data.tmdb_id)
+            details = await tmdb.get_movie(data.tmdb_id)
             title = details.get("title", "Unknown")
             year = details.get("release_date", "")[:4] if details.get("release_date") else None
             imdb_id = details.get("external_ids", {}).get("imdb_id")
             tvdb_id = None
         else:
-            details = await tmdb_client.get_tv(data.tmdb_id)
+            details = await tmdb.get_tv(data.tmdb_id)
             title = details.get("name", "Unknown")
             year = details.get("first_air_date", "")[:4] if details.get("first_air_date") else None
             imdb_id = details.get("external_ids", {}).get("imdb_id")
@@ -395,8 +414,9 @@ def list_requests(media_type: str | None = None, _: bool = Depends(verify_sessio
 @app.get("/api/trending")
 async def get_trending(media_type: str = "all", _: bool = Depends(verify_session_token)):
     """Get trending movies/TV shows."""
+    tmdb = get_tmdb_client()
     try:
-        results = await tmdb_client.get_trending(media_type)
+        results = await tmdb.get_trending(media_type)
 
         items = []
         for item in results.get("results", []):
@@ -433,24 +453,27 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
 @app.get("/rss/movies")
 def rss_movies(request: Request, _: bool = Depends(verify_feed_token)):
     """RSS feed for movie requests (Radarr compatible)."""
+    rss = get_rss_module()
     base_url = get_base_url(request)
-    xml = generate_movie_rss(base_url)
+    xml = rss.generate_movie_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
 
 @app.get("/rss/tv")
 def rss_tv(request: Request, _: bool = Depends(verify_feed_token)):
     """RSS feed for TV show requests."""
+    rss = get_rss_module()
     base_url = get_base_url(request)
-    xml = generate_tv_rss(base_url)
+    xml = rss.generate_tv_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
 
 @app.get("/rss/all")
 def rss_all(request: Request, _: bool = Depends(verify_feed_token)):
     """Combined RSS feed for all requests."""
+    rss = get_rss_module()
     base_url = get_base_url(request)
-    xml = generate_combined_rss(base_url)
+    xml = rss.generate_combined_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
 
@@ -459,13 +482,15 @@ def rss_all(request: Request, _: bool = Depends(verify_feed_token)):
 @app.get("/list/radarr")
 def list_radarr(_: bool = Depends(verify_feed_token)):
     """Radarr StevenLu Custom list format (JSON)."""
-    return generate_radarr_json()
+    rss = get_rss_module()
+    return rss.generate_radarr_json()
 
 
 @app.get("/list/sonarr")
 def list_sonarr(_: bool = Depends(verify_feed_token)):
     """Sonarr Custom List format (JSON)."""
-    return generate_sonarr_json()
+    rss = get_rss_module()
+    return rss.generate_sonarr_json()
 
 
 # --- Feed Info ---

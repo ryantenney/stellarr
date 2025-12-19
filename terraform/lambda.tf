@@ -101,7 +101,7 @@ resource "aws_lambda_function" "api" {
   role          = aws_iam_role.lambda.arn
   handler       = "main.handler"
   runtime       = "python3.12"
-  architectures = ["x86_64"]
+  architectures = ["arm64"]  # Graviton2 - faster and 20% cheaper
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory
 
