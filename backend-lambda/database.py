@@ -1,19 +1,28 @@
-import boto3
+"""
+Database operations using lightweight DynamoDB client (no boto3).
+"""
 import os
-from datetime import datetime
-from decimal import Decimal
+from datetime import datetime, timezone
 
-print("DEBUG: database.py loading...", flush=True)
+from dynamodb_lite import DynamoDBClient, ConditionalCheckFailedException
+
+print("DEBUG: database.py loading (boto3-free)...", flush=True)
 
 # Get table name from environment
 TABLE_NAME = os.environ.get('DYNAMODB_TABLE', 'overseer-lite-requests')
 AWS_REGION = os.environ.get('AWS_REGION_NAME', 'us-east-1')
 
-# Create DynamoDB resource
-dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-table = dynamodb.Table(TABLE_NAME)
+# Create lightweight DynamoDB client
+_client = None
 
-print(f"DEBUG: DynamoDB table configured: {TABLE_NAME}", flush=True)
+
+def _get_client() -> DynamoDBClient:
+    """Lazy-init the DynamoDB client."""
+    global _client
+    if _client is None:
+        _client = DynamoDBClient(TABLE_NAME, AWS_REGION)
+        print(f"DEBUG: DynamoDB client initialized for {TABLE_NAME}", flush=True)
+    return _client
 
 
 def init_db():
@@ -38,7 +47,7 @@ def add_request(
             'media_type': media_type,
             'tmdb_id': tmdb_id,
             'title': title,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(timezone.utc).isoformat(),
         }
 
         # Add optional fields if present
@@ -56,12 +65,12 @@ def add_request(
             item['requested_by'] = requested_by
 
         # Use condition to prevent overwriting existing items
-        table.put_item(
-            Item=item,
-            ConditionExpression='attribute_not_exists(media_type) AND attribute_not_exists(tmdb_id)'
+        _get_client().put_item(
+            item,
+            condition_expression='attribute_not_exists(media_type) AND attribute_not_exists(tmdb_id)'
         )
         return True
-    except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+    except ConditionalCheckFailedException:
         # Item already exists
         return False
     except Exception as e:
@@ -72,12 +81,10 @@ def add_request(
 def remove_request(tmdb_id: int, media_type: str) -> bool:
     """Remove a media request from DynamoDB."""
     try:
-        table.delete_item(
-            Key={
-                'media_type': media_type,
-                'tmdb_id': tmdb_id
-            }
-        )
+        _get_client().delete_item({
+            'media_type': media_type,
+            'tmdb_id': tmdb_id
+        })
         return True
     except Exception as e:
         print(f"Error removing request: {e}", flush=True)
@@ -87,26 +94,19 @@ def remove_request(tmdb_id: int, media_type: str) -> bool:
 def get_all_requests(media_type: str | None = None) -> list[dict]:
     """Get all media requests, optionally filtered by type."""
     try:
+        client = _get_client()
+
         if media_type:
             # Query by partition key
-            response = table.query(
-                KeyConditionExpression='media_type = :mt',
-                ExpressionAttributeValues={':mt': media_type}
+            items = client.query(
+                key_condition_expression='media_type = :mt',
+                expression_attribute_values={':mt': media_type}
             )
         else:
-            # Scan entire table
-            response = table.scan()
-
-        items = response.get('Items', [])
-
-        # Convert Decimal to int for JSON serialization
-        for item in items:
-            if 'tmdb_id' in item:
-                item['tmdb_id'] = int(item['tmdb_id'])
-            if 'year' in item and item['year'] is not None:
-                item['year'] = int(item['year'])
-            if 'tvdb_id' in item and item['tvdb_id'] is not None:
-                item['tvdb_id'] = int(item['tvdb_id'])
+            # Scan entire table (filter out rate limit entries)
+            all_items = client.scan()
+            # Filter out rate limit entries
+            items = [item for item in all_items if not item.get('media_type', '').startswith('RATELIMIT#')]
 
         # Sort by created_at descending
         items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
@@ -120,13 +120,11 @@ def get_all_requests(media_type: str | None = None) -> list[dict]:
 def is_requested(tmdb_id: int, media_type: str) -> bool:
     """Check if a media item has already been requested."""
     try:
-        response = table.get_item(
-            Key={
-                'media_type': media_type,
-                'tmdb_id': tmdb_id
-            }
-        )
-        return 'Item' in response
+        item = _get_client().get_item({
+            'media_type': media_type,
+            'tmdb_id': tmdb_id
+        })
+        return item is not None
     except Exception as e:
         print(f"Error checking request: {e}", flush=True)
         return False
@@ -140,20 +138,17 @@ def check_rate_limit(ip: str, max_attempts: int, window_seconds: int) -> tuple[b
     Returns (allowed, attempts_remaining).
     """
     try:
-        response = table.get_item(
-            Key={
-                'media_type': f'RATELIMIT#{ip}',
-                'tmdb_id': 0  # Dummy sort key
-            }
-        )
+        item = _get_client().get_item({
+            'media_type': f'RATELIMIT#{ip}',
+            'tmdb_id': 0  # Dummy sort key
+        })
 
-        item = response.get('Item')
         if not item:
             return True, max_attempts
 
         failed_attempts = int(item.get('failed_attempts', 0))
         first_attempt = int(item.get('first_attempt', 0))
-        current_time = int(datetime.utcnow().timestamp())
+        current_time = int(datetime.now(timezone.utc).timestamp())
 
         # Check if window has expired
         if current_time - first_attempt > window_seconds:
@@ -178,43 +173,44 @@ def record_failed_attempt(ip: str, window_seconds: int) -> int:
     Uses atomic increment to handle concurrent requests.
     """
     try:
-        current_time = int(datetime.utcnow().timestamp())
+        current_time = int(datetime.now(timezone.utc).timestamp())
         ttl = current_time + window_seconds + 60  # Extra minute buffer
 
         # Try to increment existing counter
-        response = table.update_item(
-            Key={
+        result = _get_client().update_item(
+            key={
                 'media_type': f'RATELIMIT#{ip}',
                 'tmdb_id': 0
             },
-            UpdateExpression='SET failed_attempts = if_not_exists(failed_attempts, :zero) + :inc, '
-                           'first_attempt = if_not_exists(first_attempt, :now), '
-                           'last_attempt = :now, '
-                           'ttl = :ttl',
-            ExpressionAttributeValues={
+            update_expression='SET failed_attempts = if_not_exists(failed_attempts, :zero) + :inc, '
+                            'first_attempt = if_not_exists(first_attempt, :now), '
+                            'last_attempt = :now, '
+                            'ttl = :ttl',
+            expression_attribute_values={
                 ':zero': 0,
                 ':inc': 1,
                 ':now': current_time,
                 ':ttl': ttl
             },
-            ReturnValues='UPDATED_NEW'
+            return_values='ALL_NEW'
         )
 
-        new_count = int(response['Attributes']['failed_attempts'])
-        first_attempt = int(response['Attributes']['first_attempt'])
+        if not result:
+            return 0
+
+        new_count = int(result.get('failed_attempts', 0))
+        first_attempt = int(result.get('first_attempt', 0))
 
         # If the window has passed, reset the counter
         if current_time - first_attempt > window_seconds:
-            table.put_item(
-                Item={
-                    'media_type': f'RATELIMIT#{ip}',
-                    'tmdb_id': 0,
-                    'failed_attempts': 1,
-                    'first_attempt': current_time,
-                    'last_attempt': current_time,
-                    'ttl': ttl
-                }
-            )
+            _get_client().put_item({
+                'media_type': f'RATELIMIT#{ip}',
+                'tmdb_id': 0,
+                'failed_attempts': 1,
+                'first_attempt': current_time,
+                'last_attempt': current_time,
+                'ttl': ttl
+            })
             return 1
 
         return new_count
@@ -227,12 +223,10 @@ def record_failed_attempt(ip: str, window_seconds: int) -> int:
 def clear_rate_limit(ip: str) -> bool:
     """Clear rate limit on successful auth."""
     try:
-        table.delete_item(
-            Key={
-                'media_type': f'RATELIMIT#{ip}',
-                'tmdb_id': 0
-            }
-        )
+        _get_client().delete_item({
+            'media_type': f'RATELIMIT#{ip}',
+            'tmdb_id': 0
+        })
         return True
     except Exception as e:
         print(f"Error clearing rate limit: {e}", flush=True)

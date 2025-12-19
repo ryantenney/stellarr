@@ -1,18 +1,11 @@
 import os
-import json
-import boto3
 import time
 from functools import lru_cache
 from pydantic_settings import BaseSettings
 
-print("DEBUG: config.py loading...", flush=True)
+from aws_sigv4 import get_secret
 
-
-def get_secret(secret_arn: str) -> dict:
-    """Retrieve a secret from AWS Secrets Manager."""
-    client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'))
-    response = client.get_secret_value(SecretId=secret_arn)
-    return json.loads(response['SecretString'])
+print("DEBUG: config.py loading (boto3-free)...", flush=True)
 
 
 class Settings(BaseSettings):
