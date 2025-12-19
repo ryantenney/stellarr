@@ -136,6 +136,15 @@ async def log_requests(request: Request, call_next):
 
 # --- Auth Helpers ---
 
+def get_base_url(request: Request) -> str:
+    """Get the base URL using the Host header (for CloudFront) or fallback to request.base_url."""
+    host = request.headers.get("host")
+    if host:
+        # Use HTTPS since CloudFront enforces it
+        return f"https://{host}"
+    return str(request.base_url).rstrip("/")
+
+
 def verify_feed_token(token: str | None = Query(None, alias="token")):
     """Verify the feed token for RSS/list endpoints."""
     if not settings.feed_token:
@@ -327,7 +336,7 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
 @app.get("/rss/movies")
 def rss_movies(request: Request, _: bool = Depends(verify_feed_token)):
     """RSS feed for movie requests (Radarr compatible)."""
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_base_url(request)
     xml = generate_movie_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
@@ -335,7 +344,7 @@ def rss_movies(request: Request, _: bool = Depends(verify_feed_token)):
 @app.get("/rss/tv")
 def rss_tv(request: Request, _: bool = Depends(verify_feed_token)):
     """RSS feed for TV show requests."""
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_base_url(request)
     xml = generate_tv_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
@@ -343,7 +352,7 @@ def rss_tv(request: Request, _: bool = Depends(verify_feed_token)):
 @app.get("/rss/all")
 def rss_all(request: Request, _: bool = Depends(verify_feed_token)):
     """Combined RSS feed for all requests."""
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_base_url(request)
     xml = generate_combined_rss(base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
@@ -367,7 +376,7 @@ def list_sonarr(_: bool = Depends(verify_feed_token)):
 @app.get("/api/feeds")
 def get_feed_info(request: Request):
     """Get information about available feeds and their URLs."""
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_base_url(request)
     token_required = bool(settings.feed_token)
     token_param = "?token=YOUR_FEED_TOKEN" if token_required else ""
 
