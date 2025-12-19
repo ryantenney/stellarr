@@ -2,8 +2,8 @@ import { getSessionToken, getUserName, logout } from './stores.js';
 
 const API_BASE = '/api';
 
-// PBKDF2 iterations - must match backend
-const PBKDF2_ITERATIONS = 100000;
+// Cached auth params (fetched from backend)
+let authParamsCache = null;
 
 // Compute SHA256 hash
 async function sha256(message) {
@@ -13,8 +13,21 @@ async function sha256(message) {
 	return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Fetch auth params from backend (cached)
+async function getAuthParams() {
+	if (authParamsCache) {
+		return authParamsCache;
+	}
+	const response = await fetch(`${API_BASE}/auth/params`);
+	if (!response.ok) {
+		throw new Error('Failed to fetch auth params');
+	}
+	authParamsCache = await response.json();
+	return authParamsCache;
+}
+
 // Derive key using PBKDF2 (brute-force resistant)
-async function pbkdf2DeriveKey(password, salt) {
+async function pbkdf2DeriveKey(password, salt, iterations) {
 	const encoder = new TextEncoder();
 
 	// Import password as a CryptoKey
@@ -31,7 +44,7 @@ async function pbkdf2DeriveKey(password, salt) {
 		{
 			name: 'PBKDF2',
 			salt: encoder.encode(salt),
-			iterations: PBKDF2_ITERATIONS,
+			iterations,
 			hash: 'SHA-256'
 		},
 		passwordKey,
@@ -77,14 +90,15 @@ async function request(endpoint, options = {}, requiresAuth = true) {
 }
 
 export async function verifyPassword(password, name) {
+	// Fetch PBKDF2 iterations from backend (single source of truth)
+	const { iterations } = await getAuthParams();
+
 	// Challenge-response auth with PBKDF2 key derivation
-	// 1. Derive key: PBKDF2(password, salt=origin, iterations=100000)
-	// 2. Hash: SHA256(derived_key:timestamp)
 	const origin = window.location.origin;
 	const timestamp = Math.floor(Date.now() / 1000);
 
 	// PBKDF2 makes brute-force attacks computationally expensive
-	const derivedKey = await pbkdf2DeriveKey(password, origin);
+	const derivedKey = await pbkdf2DeriveKey(password, origin, iterations);
 	const hash = await sha256(`${derivedKey}:${timestamp}`);
 
 	return request('/auth/verify', {

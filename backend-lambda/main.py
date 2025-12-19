@@ -168,7 +168,7 @@ def verify_feed_token(token: str | None = Query(None, alias="token")):
 # Maximum allowed time skew for challenge-response auth (5 minutes)
 AUTH_TIME_WINDOW_SECONDS = 300
 
-# PBKDF2 iterations - must match frontend
+# PBKDF2 iterations (single source of truth - frontend fetches this)
 PBKDF2_ITERATIONS = 100000
 
 
@@ -196,6 +196,12 @@ def verify_challenge_hash(origin: str, timestamp: int, provided_hash: str) -> bo
     expected_hash = hashlib.sha256(challenge_string.encode()).hexdigest()
 
     return secrets.compare_digest(provided_hash, expected_hash)
+
+
+@app.get("/api/auth/params")
+def get_auth_params():
+    """Return auth parameters (PBKDF2 iterations) for frontend."""
+    return {"iterations": PBKDF2_ITERATIONS}
 
 
 @app.post("/api/auth/verify")
