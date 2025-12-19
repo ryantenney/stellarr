@@ -4,14 +4,38 @@ Replaces boto3/botocore for lightweight Lambda deployments.
 """
 from __future__ import annotations
 
+import configparser
 import hashlib
 import hmac
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import quote
 
 import httpx
+
+
+def _get_credentials_from_file(profile: str = None) -> tuple[str | None, str | None, str | None]:
+    """Read credentials from ~/.aws/credentials file."""
+    creds_path = Path.home() / '.aws' / 'credentials'
+    if not creds_path.exists():
+        return None, None, None
+
+    profile = profile or os.environ.get('AWS_PROFILE', 'default')
+
+    config = configparser.ConfigParser()
+    config.read(creds_path)
+
+    if profile not in config:
+        return None, None, None
+
+    section = config[profile]
+    return (
+        section.get('aws_access_key_id'),
+        section.get('aws_secret_access_key'),
+        section.get('aws_session_token'),
+    )
 
 
 def _sign(key: bytes, msg: str) -> bytes:
@@ -48,15 +72,22 @@ def sign_request(
     Sign an AWS API request using SigV4.
 
     Returns headers with Authorization and other required headers added.
-    Credentials default to environment variables if not provided.
+    Credentials from: function args > env vars > ~/.aws/credentials file.
     """
     # Get credentials from environment if not provided
     access_key = access_key or os.environ.get('AWS_ACCESS_KEY_ID')
     secret_key = secret_key or os.environ.get('AWS_SECRET_ACCESS_KEY')
     session_token = session_token or os.environ.get('AWS_SESSION_TOKEN')
 
+    # Fall back to credentials file
     if not access_key or not secret_key:
-        raise ValueError("AWS credentials not found")
+        file_access, file_secret, file_token = _get_credentials_from_file()
+        access_key = access_key or file_access
+        secret_key = secret_key or file_secret
+        session_token = session_token or file_token
+
+    if not access_key or not secret_key:
+        raise ValueError("AWS credentials not found (checked env vars and ~/.aws/credentials)")
 
     # Parse URL to get host and path
     # URL format: https://dynamodb.us-east-1.amazonaws.com/
