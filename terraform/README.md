@@ -1,6 +1,6 @@
 # Terraform Configuration for Overseer Lite
 
-This Terraform configuration deploys Overseer Lite to AWS using a serverless architecture.
+This Terraform configuration deploys Overseer Lite to AWS using a serverless architecture optimized for minimal cost.
 
 ## Architecture
 
@@ -18,13 +18,35 @@ This Terraform configuration deploys Overseer Lite to AWS using a serverless arc
                  │  (Frontend) │      │   (/api/*)  │      │ (/rss,/list)│
                  └─────────────┘      └──────┬──────┘      └──────┬──────┘
                                              │                    │
-                                             ▼                    ▼
-                                      ┌─────────────┐      ┌─────────────┐
-                                      │   Aurora    │      │   Secrets   │
-                                      │ Serverless  │      │   Manager   │
-                                      │ PostgreSQL  │      └─────────────┘
+                                             ▼                    │
+                                      ┌─────────────┐             │
+                                      │  DynamoDB   │◀────────────┘
+                                      │  (Requests) │
+                                      └─────────────┘
+                                             │
+                                             ▼
+                                      ┌─────────────┐
+                                      │   Secrets   │
+                                      │   Manager   │
                                       └─────────────┘
 ```
+
+## Cost Estimate
+
+This architecture is optimized for minimal cost:
+
+| Service | Monthly Cost |
+|---------|--------------|
+| DynamoDB | **$0** (free tier: 25GB + 25 WCU/RCU) |
+| Lambda | **$0** (free tier: 1M requests/month) |
+| CloudFront | **$0** (free tier: 1TB transfer/month) |
+| S3 | **$0** (free tier: 5GB storage) |
+| Secrets Manager | **~$0.40** (1 secret) |
+| Route53 | **~$0.50** (hosted zone) |
+| ACM Certificate | **$0** (free) |
+| **Total** | **~$0.50-1/month** |
+
+**Optional:** AWS WAF adds ~$8/month for rate limiting and threat protection.
 
 ## Prerequisites
 
@@ -53,7 +75,7 @@ preshared_password = "your-secure-password"
 # Optional
 environment  = "prod"
 feed_token   = "optional-feed-protection-token"
-enable_waf   = true  # Enable AWS WAF for rate limiting
+enable_waf   = false  # Enable AWS WAF for rate limiting (~$8/month)
 ```
 
 ### 2. Initialize and Deploy
@@ -97,9 +119,6 @@ cd ../backend-lambda
 | `feed_token` | Token for RSS/list endpoint protection | `""` | No |
 | `enable_waf` | Enable AWS WAF | `false` | No |
 | `waf_rate_limit` | Requests per 5 min per IP | `100` | No |
-| `waf_auth_rate_limit` | Auth requests per 5 min per IP | `100` | No |
-| `db_min_capacity` | Aurora min ACU | `0.5` | No |
-| `db_max_capacity` | Aurora max ACU | `2` | No |
 | `lambda_memory` | Lambda memory (MB) | `512` | No |
 | `lambda_timeout` | Lambda timeout (seconds) | `30` | No |
 
@@ -148,9 +167,8 @@ WAF provides:
 - **Rate limiting** - Blocks IPs exceeding request limits
 - **AWS Managed Rules** - Protection against common exploits (SQLi, XSS)
 - **IP Reputation** - Blocks known malicious IPs
-- **CloudWatch logging** - Logs blocked requests
 
-**Cost:** ~$6-8/month base + $0.60/million requests
+**Cost:** ~$8/month base + $0.60/million requests
 
 ## Outputs
 
@@ -161,30 +179,15 @@ WAF provides:
 | `frontend_bucket_name` | S3 bucket for frontend files |
 | `lambda_function_name` | Lambda function name |
 | `lambda_deployment_bucket` | S3 bucket for Lambda code uploads |
-| `lambda_function_url` | Direct Lambda URL (internal) |
-
-## Cost Estimate
-
-Minimal usage (~100 requests/day):
-
-| Service | Estimated Cost |
-|---------|----------------|
-| Aurora Serverless v2 | ~$15-30/month (scales to near-zero when idle) |
-| Lambda | Free tier (1M requests/month) |
-| CloudFront | ~$1-5/month |
-| S3 | < $1/month |
-| Secrets Manager | ~$1/month |
-| WAF (if enabled) | ~$6-8/month |
-
-**Total:** ~$20-50/month depending on usage
+| `dynamodb_table_name` | DynamoDB table for requests |
 
 ## Security Features
 
-- **HTTPS everywhere** - TLS 1.2+ enforced
+- **HTTPS everywhere** - TLS 1.2+ enforced via CloudFront
 - **Signed session tokens** - HMAC-SHA256 with 30-day expiry
-- **Secrets Manager** - Credentials stored securely
-- **Private VPC** - Aurora only accessible from Lambda
-- **S3 private** - Frontend only accessible via CloudFront OAC
+- **Secrets Manager** - API keys and passwords stored securely
+- **Private S3** - Frontend only accessible via CloudFront OAC
+- **IAM least privilege** - Lambda has minimal required permissions
 - **WAF (optional)** - Rate limiting and threat protection
 
 ## Destroying Infrastructure
@@ -197,18 +200,32 @@ aws s3 rm s3://$(terraform output -raw frontend_bucket_name) --recursive
 terraform destroy
 ```
 
-**Note:** Aurora with `skip_final_snapshot = false` (prod) will create a final snapshot.
-
 ## Troubleshooting
 
 ### Lambda cold starts
 Increase `lambda_memory` for faster cold starts (more memory = more CPU).
 
-### Aurora connection issues
-Check Lambda security group allows outbound to Aurora security group on port 5432.
+### TMDB API timeouts
+Lambda timeout defaults to 30 seconds. TMDB API calls should complete well within this.
 
 ### CloudFront 403 errors
 Ensure S3 bucket policy allows CloudFront OAC access. Run `terraform apply` to fix.
 
+### Feed URLs showing Lambda URL
+Ensure `BASE_URL` environment variable is set on Lambda. Run `terraform apply` to update.
+
 ### WAF blocking legitimate requests
-Check CloudWatch logs (`aws-waf-logs-*`) and adjust rules or add exclusions.
+Check CloudWatch logs and adjust `waf_rate_limit` if needed.
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `main.tf` | Provider configuration |
+| `dynamodb.tf` | DynamoDB table for requests |
+| `lambda.tf` | Lambda function and IAM roles |
+| `frontend.tf` | S3, CloudFront, ACM, Route53 |
+| `secrets.tf` | Secrets Manager for app config |
+| `waf.tf` | Optional AWS WAF configuration |
+| `variables.tf` | Input variables |
+| `outputs.tf` | Output values |

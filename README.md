@@ -4,7 +4,7 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 
 ## Features
 
-- **Simple Authentication**: Preshared password protection for the web UI
+- **Simple Authentication**: Preshared password protection with signed session tokens
 - **TMDB Integration**: Search movies and TV shows using The Movie Database
 - **Sonarr/Radarr Import Lists**: Native JSON formats for direct import
 - **Feed Token Protection**: Optional token-based auth for feed endpoints
@@ -12,7 +12,7 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 - **Modern UI**: Svelte-based responsive frontend
 - **Multiple Deployment Options**:
   - Docker Compose with Caddy (auto HTTPS)
-  - AWS Serverless (Lambda + Aurora Serverless + CloudFront)
+  - AWS Serverless (Lambda + DynamoDB + CloudFront)
 
 ## Deployment Options
 
@@ -32,7 +32,7 @@ A lightweight media request system that generates feeds compatible with Sonarr a
                                         └─────────────┘
 ```
 
-### Option 2: AWS Serverless
+### Option 2: AWS Serverless (Low Cost)
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -40,15 +40,16 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 │             │     │    (CDN)    │     │ (Frontend)  │
 └─────────────┘     │             │     └─────────────┘
                     │             │     ┌─────────────┐
-                    │             │────▶│   Lambda    │
+                    │             │────▶│   Lambda    │────▶ TMDB API
                     └─────────────┘     │  (FastAPI)  │
                                         └──────┬──────┘
                                         ┌──────▼──────┐
-                                        │   Aurora    │
-                                        │ Serverless  │
-                                        │ PostgreSQL  │
+                                        │  DynamoDB   │
+                                        │ (on-demand) │
                                         └─────────────┘
 ```
+
+**AWS Cost: ~$0.50-1/month** (mostly Secrets Manager + Route53)
 
 ## Quick Start (Docker)
 
@@ -85,6 +86,7 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 - AWS CLI configured
 - Terraform >= 1.0
 - Route53 hosted zone for your domain
+- TMDB API key
 
 ### Setup
 
@@ -92,7 +94,7 @@ A lightweight media request system that generates feeds compatible with Sonarr a
    ```bash
    cd terraform
    cp terraform.tfvars.example terraform.tfvars
-   # Edit terraform.tfvars
+   # Edit terraform.tfvars with your settings
    ```
 
 2. Deploy infrastructure:
@@ -107,22 +109,30 @@ A lightweight media request system that generates feeds compatible with Sonarr a
    cd ../frontend
    npm install && npm run build
    aws s3 sync build/ s3://$(terraform -chdir=../terraform output -raw frontend_bucket_name)
-   aws cloudfront create-invalidation --distribution-id $(terraform -chdir=../terraform output -raw cloudfront_distribution_id) --paths "/*"
+   aws cloudfront create-invalidation \
+     --distribution-id $(terraform -chdir=../terraform output -raw cloudfront_distribution_id) \
+     --paths "/*"
    ```
 
 4. Deploy backend to Lambda:
    ```bash
    cd ../backend-lambda
-   ./deploy.sh $(terraform -chdir=../terraform output -raw lambda_function_name) your-deployment-bucket
+   ./deploy.sh \
+     $(terraform -chdir=../terraform output -raw lambda_function_name) \
+     $(terraform -chdir=../terraform output -raw lambda_deployment_bucket)
    ```
 
 ### AWS Cost Estimate
 
-With minimal usage:
-- **Aurora Serverless v2**: ~$0.12/ACU-hour (scales to near-zero when idle)
-- **Lambda**: Free tier covers most small deployments
-- **CloudFront**: ~$0.085/GB transfer
-- **S3**: Negligible for static hosting
+| Service | Monthly Cost |
+|---------|--------------|
+| DynamoDB | $0 (free tier: 25GB + 25 WCU/RCU) |
+| Lambda | $0 (free tier: 1M requests) |
+| CloudFront | $0 (free tier: 1TB transfer) |
+| S3 | $0 (free tier: 5GB) |
+| Secrets Manager | ~$0.40 |
+| Route53 | ~$0.50 (hosted zone) |
+| **Total** | **~$0.50-1/month** |
 
 ## Import Lists for Sonarr/Radarr
 
@@ -160,7 +170,7 @@ Items missing these IDs will show a warning indicator and won't appear in the re
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/auth/verify` | POST | Verify password |
+| `/api/auth/verify` | POST | Verify password, returns session token |
 | `/api/search` | POST | Search TMDB |
 | `/api/trending` | GET | Get trending media |
 | `/api/request` | POST | Add a request |
@@ -184,16 +194,16 @@ Items missing these IDs will show a warning indicator and won't appear in the re
 ```
 overseer-lite/
 ├── backend/              # Docker backend (SQLite)
-├── backend-lambda/       # AWS Lambda backend (PostgreSQL)
+├── backend-lambda/       # AWS Lambda backend (DynamoDB)
 ├── frontend/             # Svelte SPA
 ├── caddy/                # Caddy configs
 ├── terraform/            # AWS infrastructure
 │   ├── main.tf
-│   ├── vpc.tf           # VPC for Aurora
-│   ├── aurora.tf        # Aurora Serverless v2
+│   ├── dynamodb.tf      # DynamoDB table
 │   ├── lambda.tf        # Lambda function
 │   ├── frontend.tf      # S3 + CloudFront
 │   ├── secrets.tf       # Secrets Manager
+│   ├── waf.tf           # AWS WAF (optional)
 │   └── outputs.tf
 ├── docker-compose.yml
 └── docker-compose.prod.yml
@@ -208,6 +218,14 @@ overseer-lite/
 | `TMDB_API_KEY` | TMDB API key | Yes |
 | `FEED_TOKEN` | Token for feed endpoint auth | No |
 | `DOMAIN` | Your domain (for HTTPS) | Production |
+
+## Security
+
+- **HTTPS everywhere** - TLS 1.2+ enforced via CloudFront
+- **Signed session tokens** - HMAC-SHA256 with 30-day expiry
+- **Secrets Manager** - API keys stored securely
+- **Private S3** - Frontend only accessible via CloudFront
+- **WAF (optional)** - Rate limiting and threat protection (~$8/month extra)
 
 ## Feed Format Details
 
