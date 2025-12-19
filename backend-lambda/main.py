@@ -13,19 +13,34 @@ import os
 
 print("DEBUG: Starting main.py module load...", flush=True)
 
-from config import get_settings
-print("DEBUG: Config module imported", flush=True)
-
-from database import (
-    init_db, add_request, remove_request, get_all_requests, is_requested,
-    check_rate_limit, record_failed_attempt, clear_rate_limit
-)
-print("DEBUG: Database module imported", flush=True)
-
+# =============================================================================
 # Lazy imports for cold start optimization
 # These modules are only loaded when their endpoints are first called
+# =============================================================================
+_settings = None
+_database = None
 _tmdb_client = None
 _rss_module = None
+
+
+def get_settings_lazy():
+    """Lazy load settings from Secrets Manager on first use."""
+    global _settings
+    if _settings is None:
+        print("DEBUG: Lazy loading settings...", flush=True)
+        from config import get_settings
+        _settings = get_settings()
+    return _settings
+
+
+def get_database():
+    """Lazy load database module on first use."""
+    global _database
+    if _database is None:
+        print("DEBUG: Lazy loading database...", flush=True)
+        import database
+        _database = database
+    return _database
 
 
 def get_tmdb_client():
@@ -48,8 +63,6 @@ def get_rss_module():
     return _rss_module
 
 
-settings = get_settings()
-
 # Rate limiting config (from Terraform env vars)
 RATE_LIMIT_ENABLED = os.environ.get('RATE_LIMIT_ENABLED', 'false').lower() == 'true'
 RATE_LIMIT_MAX_ATTEMPTS = int(os.environ.get('RATE_LIMIT_MAX_ATTEMPTS', '5'))
@@ -58,29 +71,13 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('RATE_LIMIT_WINDOW_SECONDS', '900
 # CORS config
 ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
 
-# Initialize database once at module load (not on every request)
-_db_initialized = False
-
-def ensure_db_initialized():
-    """Initialize database tables once per Lambda instance."""
-    global _db_initialized
-    if not _db_initialized:
-        print("DEBUG: Initializing database (first time for this Lambda instance)...", flush=True)
-        start = time.time()
-        try:
-            init_db()
-            print(f"DEBUG: Database initialized successfully in {time.time() - start:.2f}s", flush=True)
-            _db_initialized = True
-        except Exception as e:
-            print(f"DEBUG: Database initialization failed after {time.time() - start:.2f}s: {type(e).__name__}: {e}", flush=True)
-            raise
-
 # Session duration: 30 days in seconds
 SESSION_DURATION_SECONDS = 30 * 24 * 60 * 60
 
 
 def create_session_token() -> str:
     """Create a signed session token with timestamp."""
+    settings = get_settings_lazy()
     timestamp = str(int(time.time()))
     signature = hmac.new(
         settings.app_secret_key.encode(),
@@ -111,6 +108,7 @@ def verify_session_token(authorization: str | None = Header(None, alias="Authori
     if time.time() - timestamp > SESSION_DURATION_SECONDS:
         raise HTTPException(status_code=401, detail="Session expired")
 
+    settings = get_settings_lazy()
     expected_sig = hmac.new(
         settings.app_secret_key.encode(),
         timestamp_str.encode(),
@@ -187,6 +185,7 @@ def get_base_url(request: Request) -> str:
 
 def verify_feed_token(token: str | None = Query(None, alias="token")):
     """Verify the feed token for RSS/list endpoints."""
+    settings = get_settings_lazy()
     if not settings.feed_token:
         return True
 
@@ -220,6 +219,7 @@ class AuthChallenge(BaseModel):
 
 def verify_challenge_hash(origin: str, timestamp: int, provided_hash: str) -> bool:
     """Verify the challenge-response hash with PBKDF2 key derivation."""
+    settings = get_settings_lazy()
     # 1. Derive key using PBKDF2 (makes brute-force attacks expensive)
     derived_key = hashlib.pbkdf2_hmac(
         'sha256',
@@ -250,7 +250,8 @@ def verify_auth(data: AuthChallenge, request: Request):
 
     # Check rate limit BEFORE expensive PBKDF2 computation
     if RATE_LIMIT_ENABLED:
-        allowed, remaining = check_rate_limit(
+        db = get_database()
+        allowed, remaining = db.check_rate_limit(
             client_ip, RATE_LIMIT_MAX_ATTEMPTS, RATE_LIMIT_WINDOW_SECONDS
         )
         if not allowed:
@@ -273,7 +274,8 @@ def verify_auth(data: AuthChallenge, request: Request):
     if not verify_challenge_hash(data.origin, data.timestamp, data.hash):
         # Record failed attempt for rate limiting
         if RATE_LIMIT_ENABLED:
-            record_failed_attempt(client_ip, RATE_LIMIT_WINDOW_SECONDS)
+            db = get_database()
+            db.record_failed_attempt(client_ip, RATE_LIMIT_WINDOW_SECONDS)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Validate name
@@ -283,7 +285,8 @@ def verify_auth(data: AuthChallenge, request: Request):
 
     # Clear rate limit on successful auth
     if RATE_LIMIT_ENABLED:
-        clear_rate_limit(client_ip)
+        db = get_database()
+        db.clear_rate_limit(client_ip)
 
     token = create_session_token()
     return {"valid": True, "token": token, "name": name}
@@ -301,6 +304,7 @@ class SearchQuery(BaseModel):
 async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
     """Search TMDB for movies and TV shows."""
     tmdb = get_tmdb_client()
+    db = get_database()
     try:
         if data.media_type == "movie":
             results = await tmdb.search_movie(data.query, data.page)
@@ -324,7 +328,7 @@ async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
                 title = item.get("title", "Unknown")
                 year = item.get("release_date", "")[:4] if item.get("release_date") else None
 
-            requested = is_requested(tmdb_id, media_type)
+            requested = db.is_requested(tmdb_id, media_type)
 
             filtered_results.append({
                 "id": tmdb_id,
@@ -359,6 +363,7 @@ class MediaRequest(BaseModel):
 async def create_request(data: MediaRequest, _: bool = Depends(verify_session_token)):
     """Add a media item to the request list."""
     tmdb = get_tmdb_client()
+    db = get_database()
     try:
         if data.media_type == "movie":
             details = await tmdb.get_movie(data.tmdb_id)
@@ -373,7 +378,7 @@ async def create_request(data: MediaRequest, _: bool = Depends(verify_session_to
             imdb_id = details.get("external_ids", {}).get("imdb_id")
             tvdb_id = details.get("external_ids", {}).get("tvdb_id")
 
-        success = add_request(
+        success = db.add_request(
             tmdb_id=data.tmdb_id,
             media_type=data.media_type,
             title=title,
@@ -396,7 +401,8 @@ async def create_request(data: MediaRequest, _: bool = Depends(verify_session_to
 @app.delete("/api/request/{media_type}/{tmdb_id}")
 def delete_request(media_type: str, tmdb_id: int, _: bool = Depends(verify_session_token)):
     """Remove a media item from the request list."""
-    success = remove_request(tmdb_id, media_type)
+    db = get_database()
+    success = db.remove_request(tmdb_id, media_type)
     if success:
         return {"success": True, "message": "Request removed"}
     raise HTTPException(status_code=404, detail="Request not found")
@@ -405,7 +411,8 @@ def delete_request(media_type: str, tmdb_id: int, _: bool = Depends(verify_sessi
 @app.get("/api/requests")
 def list_requests(media_type: str | None = None, _: bool = Depends(verify_session_token)):
     """Get all requests, optionally filtered by media type."""
-    requests = get_all_requests(media_type)
+    db = get_database()
+    requests = db.get_all_requests(media_type)
     return {"requests": requests}
 
 
@@ -415,6 +422,7 @@ def list_requests(media_type: str | None = None, _: bool = Depends(verify_sessio
 async def get_trending(media_type: str = "all", _: bool = Depends(verify_session_token)):
     """Get trending movies/TV shows."""
     tmdb = get_tmdb_client()
+    db = get_database()
     try:
         results = await tmdb.get_trending(media_type)
 
@@ -430,7 +438,7 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
                 title = item.get("title", "Unknown")
                 year = item.get("release_date", "")[:4] if item.get("release_date") else None
 
-            requested = is_requested(tmdb_id, item_type)
+            requested = db.is_requested(tmdb_id, item_type)
 
             items.append({
                 "id": tmdb_id,
@@ -498,6 +506,7 @@ def list_sonarr(_: bool = Depends(verify_feed_token)):
 @app.get("/api/feeds")
 def get_feed_info(request: Request):
     """Get information about available feeds and their URLs."""
+    settings = get_settings_lazy()
     base_url = get_base_url(request)
     token_required = bool(settings.feed_token)
     token_param = "?token=YOUR_FEED_TOKEN" if token_required else ""
@@ -546,14 +555,11 @@ def get_feed_info(request: Request):
 
 @app.get("/api/health")
 def health_check():
-    """Health check endpoint."""
+    """Health check endpoint - no dependencies, fastest possible response."""
     return {"status": "healthy", "service": "overseer-lite"}
 
 
-# Initialize database once per Lambda instance (at module load, not per request)
-print("DEBUG: About to initialize database at module load time...", flush=True)
-ensure_db_initialized()
 print("DEBUG: Module load complete, handler ready", flush=True)
 
-# Lambda handler - lifespan="off" since we handle init at module level
+# Lambda handler - lifespan="off" since we handle init lazily
 handler = Mangum(app, lifespan="off")
