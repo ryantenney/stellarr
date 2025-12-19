@@ -4,6 +4,7 @@
 	import { verifyPassword, search, getTrending, addRequest } from '$lib/api.js';
 
 	let password = '';
+	let userName = '';
 	let searchQuery = '';
 	let searchResults = [];
 	let trendingResults = [];
@@ -17,14 +18,18 @@
 	});
 
 	async function handleLogin() {
+		if (!userName.trim()) {
+			addToast('Please enter your name', 'error');
+			return;
+		}
 		try {
 			$loading = true;
-			const response = await verifyPassword(password);
-			setAuthenticated(response.token);
-			addToast('Welcome to Overseer Lite!', 'success');
+			const response = await verifyPassword(password, userName.trim());
+			setAuthenticated(response.token, response.name);
+			addToast(`Welcome, ${response.name}!`, 'success');
 			await loadTrending();
 		} catch (error) {
-			addToast('Invalid password', 'error');
+			addToast(error.message || 'Invalid credentials', 'error');
 		} finally {
 			$loading = false;
 		}
@@ -87,15 +92,21 @@
 	<div class="login-container">
 		<div class="login-card">
 			<h1>🎬 Overseer Lite</h1>
-			<p>Enter the password to continue</p>
+			<p>Enter your name and password to continue</p>
 			<form on:submit|preventDefault={handleLogin}>
+				<input
+					type="text"
+					bind:value={userName}
+					placeholder="Your Name"
+					autocomplete="name"
+				/>
 				<input
 					type="password"
 					bind:value={password}
 					placeholder="Password"
 					autocomplete="current-password"
 				/>
-				<button type="submit" disabled={$loading}>
+				<button type="submit" disabled={$loading || !userName.trim()}>
 					{$loading ? 'Checking...' : 'Enter'}
 				</button>
 			</form>

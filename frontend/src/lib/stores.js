@@ -37,6 +37,21 @@ export function getSessionToken() {
 	}
 }
 
+// Get the stored user name
+export function getUserName() {
+	if (!browser) return null;
+
+	const authData = localStorage.getItem('auth_session');
+	if (!authData) return null;
+
+	try {
+		const session = JSON.parse(authData);
+		return session.name || null;
+	} catch {
+		return null;
+	}
+}
+
 // Get session expiry info
 export function getSessionInfo() {
 	if (!browser) return null;
@@ -67,10 +82,10 @@ if (browser && !storedAuth) {
 	localStorage.removeItem('auth_session');
 }
 
-// Set authenticated state with token from backend
-export function setAuthenticated(token) {
+// Set authenticated state with token and name from backend
+export function setAuthenticated(token, name = null) {
 	if (browser && token) {
-		const session = { authenticated: true, timestamp: Date.now(), token };
+		const session = { authenticated: true, timestamp: Date.now(), token, name };
 		localStorage.setItem('auth_session', JSON.stringify(session));
 	}
 	authenticated.set(true);

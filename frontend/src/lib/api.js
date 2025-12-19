@@ -1,6 +1,14 @@
-import { getSessionToken, logout } from './stores.js';
+import { getSessionToken, getUserName, logout } from './stores.js';
 
 const API_BASE = '/api';
+
+// Compute SHA256 hash for challenge-response auth
+async function sha256(message) {
+	const msgBuffer = new TextEncoder().encode(message);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 async function request(endpoint, options = {}, requiresAuth = true) {
 	const headers = {
@@ -35,10 +43,16 @@ async function request(endpoint, options = {}, requiresAuth = true) {
 	return response.json();
 }
 
-export async function verifyPassword(password) {
+export async function verifyPassword(password, name) {
+	// Challenge-response auth: hash origin + timestamp + password
+	const origin = window.location.origin;
+	const timestamp = Math.floor(Date.now() / 1000);
+	const challengeString = `${origin}:${timestamp}:${password}`;
+	const hash = await sha256(challengeString);
+
 	return request('/auth/verify', {
 		method: 'POST',
-		body: JSON.stringify({ password })
+		body: JSON.stringify({ origin, timestamp, hash, name })
 	}, false);  // No auth required for login
 }
 
@@ -59,9 +73,14 @@ export async function getRequests(mediaType = null) {
 }
 
 export async function addRequest(tmdbId, mediaType) {
+	const requestedBy = getUserName();
 	return request('/request', {
 		method: 'POST',
-		body: JSON.stringify({ tmdb_id: tmdbId, media_type: mediaType })
+		body: JSON.stringify({
+			tmdb_id: tmdbId,
+			media_type: mediaType,
+			requested_by: requestedBy
+		})
 	});
 }
 

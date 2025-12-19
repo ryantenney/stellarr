@@ -29,7 +29,8 @@ def add_request(
     overview: str | None,
     poster_path: str | None,
     imdb_id: str | None = None,
-    tvdb_id: int | None = None
+    tvdb_id: int | None = None,
+    requested_by: str | None = None
 ) -> bool:
     """Add a media request to DynamoDB."""
     try:
@@ -51,6 +52,8 @@ def add_request(
             item['imdb_id'] = imdb_id
         if tvdb_id is not None:
             item['tvdb_id'] = tvdb_id
+        if requested_by:
+            item['requested_by'] = requested_by
 
         # Use condition to prevent overwriting existing items
         table.put_item(

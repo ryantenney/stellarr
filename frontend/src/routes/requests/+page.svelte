@@ -145,7 +145,13 @@
 							<span class="year">{item.year || 'Unknown'}</span>
 							<p class="overview">{item.overview || 'No description available'}</p>
 							<div class="meta">
-								<span class="date">Added: {formatDate(item.created_at)}</span>
+								<span class="date">
+									{#if item.requested_by}
+										{item.requested_by} · {formatDate(item.created_at)}
+									{:else}
+										Added: {formatDate(item.created_at)}
+									{/if}
+								</span>
 								{#if item.imdb_id}
 									<a
 										href="https://www.imdb.com/title/{item.imdb_id}"

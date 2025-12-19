@@ -165,17 +165,49 @@ def verify_feed_token(token: str | None = Query(None, alias="token")):
 
 # --- Auth ---
 
-class PasswordCheck(BaseModel):
-    password: str
+# Maximum allowed time skew for challenge-response auth (5 minutes)
+AUTH_TIME_WINDOW_SECONDS = 300
+
+
+class AuthChallenge(BaseModel):
+    origin: str      # The origin URL (e.g., "https://overseer.example.com")
+    timestamp: int   # Unix timestamp when hash was generated
+    hash: str        # SHA256(origin:timestamp:password)
+    name: str        # User's display name
+
+
+def verify_challenge_hash(origin: str, timestamp: int, provided_hash: str) -> bool:
+    """Verify the challenge-response hash."""
+    # Compute expected hash: SHA256(origin:timestamp:password)
+    challenge_string = f"{origin}:{timestamp}:{settings.preshared_password}"
+    expected_hash = hashlib.sha256(challenge_string.encode()).hexdigest()
+    return secrets.compare_digest(provided_hash, expected_hash)
 
 
 @app.post("/api/auth/verify")
-def verify_auth(data: PasswordCheck):
-    """Verify the preshared password and return a session token."""
-    if secrets.compare_digest(data.password, settings.preshared_password):
-        token = create_session_token()
-        return {"valid": True, "token": token}
-    raise HTTPException(status_code=401, detail="Invalid password")
+def verify_auth(data: AuthChallenge):
+    """Verify challenge-response auth and return a session token."""
+    current_time = int(time.time())
+
+    # Check timestamp is within allowed window
+    time_diff = abs(current_time - data.timestamp)
+    if time_diff > AUTH_TIME_WINDOW_SECONDS:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Timestamp expired. Please try again. (skew: {time_diff}s)"
+        )
+
+    # Verify the hash
+    if not verify_challenge_hash(data.origin, data.timestamp, data.hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Validate name
+    name = data.name.strip()
+    if not name or len(name) > 50:
+        raise HTTPException(status_code=400, detail="Name is required (max 50 chars)")
+
+    token = create_session_token()
+    return {"valid": True, "token": token, "name": name}
 
 
 # --- Search ---
@@ -240,6 +272,7 @@ async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
 class MediaRequest(BaseModel):
     tmdb_id: int
     media_type: str
+    requested_by: str | None = None  # Name of person who requested
 
 
 @app.post("/api/request")
@@ -267,7 +300,8 @@ async def create_request(data: MediaRequest, _: bool = Depends(verify_session_to
             overview=details.get("overview"),
             poster_path=details.get("poster_path"),
             imdb_id=imdb_id,
-            tvdb_id=tvdb_id
+            tvdb_id=tvdb_id,
+            requested_by=data.requested_by
         )
 
         if success:
