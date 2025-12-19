@@ -2,12 +2,45 @@ import { getSessionToken, getUserName, logout } from './stores.js';
 
 const API_BASE = '/api';
 
-// Compute SHA256 hash for challenge-response auth
+// PBKDF2 iterations - must match backend
+const PBKDF2_ITERATIONS = 100000;
+
+// Compute SHA256 hash
 async function sha256(message) {
 	const msgBuffer = new TextEncoder().encode(message);
 	const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
 	const hashArray = Array.from(new Uint8Array(hashBuffer));
 	return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Derive key using PBKDF2 (brute-force resistant)
+async function pbkdf2DeriveKey(password, salt) {
+	const encoder = new TextEncoder();
+
+	// Import password as a CryptoKey
+	const passwordKey = await crypto.subtle.importKey(
+		'raw',
+		encoder.encode(password),
+		'PBKDF2',
+		false,
+		['deriveBits']
+	);
+
+	// Derive 256 bits using PBKDF2
+	const derivedBits = await crypto.subtle.deriveBits(
+		{
+			name: 'PBKDF2',
+			salt: encoder.encode(salt),
+			iterations: PBKDF2_ITERATIONS,
+			hash: 'SHA-256'
+		},
+		passwordKey,
+		256  // 256 bits = 32 bytes
+	);
+
+	// Convert to hex string
+	const derivedArray = Array.from(new Uint8Array(derivedBits));
+	return derivedArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function request(endpoint, options = {}, requiresAuth = true) {
@@ -44,11 +77,15 @@ async function request(endpoint, options = {}, requiresAuth = true) {
 }
 
 export async function verifyPassword(password, name) {
-	// Challenge-response auth: hash origin + timestamp + password
+	// Challenge-response auth with PBKDF2 key derivation
+	// 1. Derive key: PBKDF2(password, salt=origin, iterations=100000)
+	// 2. Hash: SHA256(derived_key:timestamp)
 	const origin = window.location.origin;
 	const timestamp = Math.floor(Date.now() / 1000);
-	const challengeString = `${origin}:${timestamp}:${password}`;
-	const hash = await sha256(challengeString);
+
+	// PBKDF2 makes brute-force attacks computationally expensive
+	const derivedKey = await pbkdf2DeriveKey(password, origin);
+	const hash = await sha256(`${derivedKey}:${timestamp}`);
 
 	return request('/auth/verify', {
 		method: 'POST',

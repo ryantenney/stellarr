@@ -168,19 +168,33 @@ def verify_feed_token(token: str | None = Query(None, alias="token")):
 # Maximum allowed time skew for challenge-response auth (5 minutes)
 AUTH_TIME_WINDOW_SECONDS = 300
 
+# PBKDF2 iterations - must match frontend
+PBKDF2_ITERATIONS = 100000
+
 
 class AuthChallenge(BaseModel):
     origin: str      # The origin URL (e.g., "https://overseer.example.com")
     timestamp: int   # Unix timestamp when hash was generated
-    hash: str        # SHA256(origin:timestamp:password)
+    hash: str        # SHA256(PBKDF2(password, origin):timestamp)
     name: str        # User's display name
 
 
 def verify_challenge_hash(origin: str, timestamp: int, provided_hash: str) -> bool:
-    """Verify the challenge-response hash."""
-    # Compute expected hash: SHA256(origin:timestamp:password)
-    challenge_string = f"{origin}:{timestamp}:{settings.preshared_password}"
+    """Verify the challenge-response hash with PBKDF2 key derivation."""
+    # 1. Derive key using PBKDF2 (makes brute-force attacks expensive)
+    derived_key = hashlib.pbkdf2_hmac(
+        'sha256',
+        settings.preshared_password.encode(),
+        origin.encode(),
+        PBKDF2_ITERATIONS,
+        dklen=32  # 256 bits
+    )
+    derived_key_hex = derived_key.hex()
+
+    # 2. Compute expected hash: SHA256(derived_key:timestamp)
+    challenge_string = f"{derived_key_hex}:{timestamp}"
     expected_hash = hashlib.sha256(challenge_string.encode()).hexdigest()
+
     return secrets.compare_digest(provided_hash, expected_hash)
 
 
