@@ -131,7 +131,7 @@
 			</div>
 		{:else}
 			<div class="requests-grid">
-				{#each requests as item (item.id)}
+				{#each requests as item (`${item.media_type}-${item.tmdb_id}`)}
 					<div class="request-card" class:has-warning={getMissingIdWarning(item)}>
 						<div class="poster">
 							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
