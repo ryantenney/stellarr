@@ -3,6 +3,7 @@
 # Usage: ./deploy.sh <function-name> <s3-bucket> [region]
 #
 # Builds Lambda package using Docker to ensure Linux-compatible binaries
+# Uses ARM64 (Graviton2) for better performance and lower cost
 
 set -e
 
@@ -13,19 +14,24 @@ REGION="${3:-us-east-1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "Building Lambda deployment package using Docker..."
+echo "Building Lambda deployment package using Docker (arm64)..."
 
 # Create temp directory
 TEMP_DIR=$(mktemp -d)
 mkdir -p "$TEMP_DIR/package"
 
-# Build using Docker with Lambda Python runtime (x86_64 for Lambda compatibility)
-docker run --rm --platform linux/amd64 \
+# Build using Docker with Lambda Python runtime (arm64 for Graviton2)
+docker run --rm --platform linux/arm64 \
     --entrypoint /bin/bash \
     -v "$SCRIPT_DIR":/var/task \
     -v "$TEMP_DIR/package":/var/package \
     public.ecr.aws/lambda/python:3.12 \
-    -c "pip install -r /var/task/requirements.txt -t /var/package --quiet && cp /var/task/*.py /var/package/"
+    -c "
+        pip install -r /var/task/requirements.txt -t /var/package --quiet && \
+        cp /var/task/*.py /var/package/ && \
+        python -m compileall -b -q /var/package && \
+        find /var/package -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+    "
 
 # Create zip
 cd "$TEMP_DIR/package"
