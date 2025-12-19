@@ -43,7 +43,12 @@
 
 		try {
 			await removeRequest(item.tmdb_id, item.media_type);
-			requests = requests.filter(r => !(r.tmdb_id === item.tmdb_id && r.media_type === item.media_type));
+			const tmdbId = Number(item.tmdb_id);
+			const mediaType = item.media_type;
+			console.log('Removing:', { tmdbId, mediaType });
+			console.log('Before filter:', requests.map(r => ({ tmdb_id: r.tmdb_id, media_type: r.media_type })));
+			requests = requests.filter(r => !(Number(r.tmdb_id) === tmdbId && r.media_type === mediaType));
+			console.log('After filter:', requests.map(r => ({ tmdb_id: r.tmdb_id, media_type: r.media_type })));
 			addToast(`Removed "${item.title}"`, 'success');
 		} catch (error) {
 			addToast('Failed to remove request', 'error');
