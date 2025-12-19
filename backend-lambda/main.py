@@ -9,6 +9,7 @@ import hashlib
 import base64
 import time
 import logging
+import os
 
 print("DEBUG: Starting main.py module load...", flush=True)
 
@@ -137,11 +138,11 @@ async def log_requests(request: Request, call_next):
 # --- Auth Helpers ---
 
 def get_base_url(request: Request) -> str:
-    """Get the base URL using the Host header (for CloudFront) or fallback to request.base_url."""
-    host = request.headers.get("host")
-    if host:
-        # Use HTTPS since CloudFront enforces it
-        return f"https://{host}"
+    """Get the base URL from environment variable (set by Terraform) or fallback."""
+    # Use BASE_URL env var set by Terraform (preferred for CloudFront)
+    base_url = os.environ.get("BASE_URL")
+    if base_url:
+        return base_url.rstrip("/")
     return str(request.base_url).rstrip("/")
 
 

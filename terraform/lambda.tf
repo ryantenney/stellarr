@@ -113,9 +113,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE = aws_dynamodb_table.requests.name
-      APP_SECRET_ARN = aws_secretsmanager_secret.app_config.arn
+      DYNAMODB_TABLE  = aws_dynamodb_table.requests.name
+      APP_SECRET_ARN  = aws_secretsmanager_secret.app_config.arn
       AWS_REGION_NAME = var.aws_region
+      BASE_URL        = "https://${var.domain_name}"
     }
   }
 
