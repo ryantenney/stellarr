@@ -130,3 +130,110 @@ def is_requested(tmdb_id: int, media_type: str) -> bool:
     except Exception as e:
         print(f"Error checking request: {e}", flush=True)
         return False
+
+
+# --- Rate Limiting ---
+
+def check_rate_limit(ip: str, max_attempts: int, window_seconds: int) -> tuple[bool, int]:
+    """
+    Check if an IP is rate limited.
+    Returns (allowed, attempts_remaining).
+    """
+    try:
+        response = table.get_item(
+            Key={
+                'media_type': f'RATELIMIT#{ip}',
+                'tmdb_id': 0  # Dummy sort key
+            }
+        )
+
+        item = response.get('Item')
+        if not item:
+            return True, max_attempts
+
+        failed_attempts = int(item.get('failed_attempts', 0))
+        first_attempt = int(item.get('first_attempt', 0))
+        current_time = int(datetime.utcnow().timestamp())
+
+        # Check if window has expired
+        if current_time - first_attempt > window_seconds:
+            # Window expired, allow and reset will happen on next failure
+            return True, max_attempts
+
+        # Check if over limit
+        if failed_attempts >= max_attempts:
+            return False, 0
+
+        return True, max_attempts - failed_attempts
+
+    except Exception as e:
+        print(f"Error checking rate limit: {e}", flush=True)
+        # Fail open - allow request if we can't check
+        return True, max_attempts
+
+
+def record_failed_attempt(ip: str, window_seconds: int) -> int:
+    """
+    Record a failed auth attempt. Returns new failure count.
+    Uses atomic increment to handle concurrent requests.
+    """
+    try:
+        current_time = int(datetime.utcnow().timestamp())
+        ttl = current_time + window_seconds + 60  # Extra minute buffer
+
+        # Try to increment existing counter
+        response = table.update_item(
+            Key={
+                'media_type': f'RATELIMIT#{ip}',
+                'tmdb_id': 0
+            },
+            UpdateExpression='SET failed_attempts = if_not_exists(failed_attempts, :zero) + :inc, '
+                           'first_attempt = if_not_exists(first_attempt, :now), '
+                           'last_attempt = :now, '
+                           'ttl = :ttl',
+            ExpressionAttributeValues={
+                ':zero': 0,
+                ':inc': 1,
+                ':now': current_time,
+                ':ttl': ttl
+            },
+            ReturnValues='UPDATED_NEW'
+        )
+
+        new_count = int(response['Attributes']['failed_attempts'])
+        first_attempt = int(response['Attributes']['first_attempt'])
+
+        # If the window has passed, reset the counter
+        if current_time - first_attempt > window_seconds:
+            table.put_item(
+                Item={
+                    'media_type': f'RATELIMIT#{ip}',
+                    'tmdb_id': 0,
+                    'failed_attempts': 1,
+                    'first_attempt': current_time,
+                    'last_attempt': current_time,
+                    'ttl': ttl
+                }
+            )
+            return 1
+
+        return new_count
+
+    except Exception as e:
+        print(f"Error recording failed attempt: {e}", flush=True)
+        return 0
+
+
+def clear_rate_limit(ip: str) -> bool:
+    """Clear rate limit on successful auth."""
+    try:
+        table.delete_item(
+            Key={
+                'media_type': f'RATELIMIT#{ip}',
+                'tmdb_id': 0
+            }
+        )
+        return True
+    except Exception as e:
+        print(f"Error clearing rate limit: {e}", flush=True)
+        return False

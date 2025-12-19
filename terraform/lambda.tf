@@ -113,10 +113,14 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE  = aws_dynamodb_table.requests.name
-      APP_SECRET_ARN  = aws_secretsmanager_secret.app_config.arn
-      AWS_REGION_NAME = var.aws_region
-      BASE_URL        = "https://${var.domain_name}"
+      DYNAMODB_TABLE            = aws_dynamodb_table.requests.name
+      APP_SECRET_ARN            = aws_secretsmanager_secret.app_config.arn
+      AWS_REGION_NAME           = var.aws_region
+      BASE_URL                  = "https://${var.domain_name}"
+      ALLOWED_ORIGIN            = "https://${var.domain_name}"
+      RATE_LIMIT_ENABLED        = var.enable_rate_limiting ? "true" : "false"
+      RATE_LIMIT_MAX_ATTEMPTS   = tostring(var.rate_limit_max_attempts)
+      RATE_LIMIT_WINDOW_SECONDS = tostring(var.rate_limit_window_seconds)
     }
   }
 

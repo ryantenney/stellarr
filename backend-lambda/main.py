@@ -16,7 +16,10 @@ print("DEBUG: Starting main.py module load...", flush=True)
 from config import get_settings
 print("DEBUG: Config module imported", flush=True)
 
-from database import init_db, add_request, remove_request, get_all_requests, is_requested
+from database import (
+    init_db, add_request, remove_request, get_all_requests, is_requested,
+    check_rate_limit, record_failed_attempt, clear_rate_limit
+)
 print("DEBUG: Database module imported", flush=True)
 from tmdb import tmdb_client
 from rss import (
@@ -29,6 +32,14 @@ from rss import (
 
 
 settings = get_settings()
+
+# Rate limiting config (from Terraform env vars)
+RATE_LIMIT_ENABLED = os.environ.get('RATE_LIMIT_ENABLED', 'false').lower() == 'true'
+RATE_LIMIT_MAX_ATTEMPTS = int(os.environ.get('RATE_LIMIT_MAX_ATTEMPTS', '5'))
+RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('RATE_LIMIT_WINDOW_SECONDS', '900'))
+
+# CORS config
+ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
 
 # Initialize database once at module load (not on every request)
 _db_initialized = False
@@ -112,7 +123,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[ALLOWED_ORIGIN] if ALLOWED_ORIGIN != "*" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -136,6 +147,17 @@ async def log_requests(request: Request, call_next):
 
 
 # --- Auth Helpers ---
+
+def get_client_ip(request: Request) -> str:
+    """Get client IP, accounting for CloudFront/proxy forwarding."""
+    # CloudFront adds the real client IP to X-Forwarded-For
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        # X-Forwarded-For can be a comma-separated list; first is the client
+        return forwarded_for.split(",")[0].strip()
+    # Fallback to direct client IP
+    return request.client.host if request.client else "unknown"
+
 
 def get_base_url(request: Request) -> str:
     """Get the base URL from environment variable (set by Terraform) or fallback."""
@@ -205,8 +227,21 @@ def get_auth_params():
 
 
 @app.post("/api/auth/verify")
-def verify_auth(data: AuthChallenge):
+def verify_auth(data: AuthChallenge, request: Request):
     """Verify challenge-response auth and return a session token."""
+    client_ip = get_client_ip(request)
+
+    # Check rate limit BEFORE expensive PBKDF2 computation
+    if RATE_LIMIT_ENABLED:
+        allowed, remaining = check_rate_limit(
+            client_ip, RATE_LIMIT_MAX_ATTEMPTS, RATE_LIMIT_WINDOW_SECONDS
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Try again in {RATE_LIMIT_WINDOW_SECONDS // 60} minutes."
+            )
+
     current_time = int(time.time())
 
     # Check timestamp is within allowed window
@@ -219,12 +254,19 @@ def verify_auth(data: AuthChallenge):
 
     # Verify the hash
     if not verify_challenge_hash(data.origin, data.timestamp, data.hash):
+        # Record failed attempt for rate limiting
+        if RATE_LIMIT_ENABLED:
+            record_failed_attempt(client_ip, RATE_LIMIT_WINDOW_SECONDS)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Validate name
     name = data.name.strip()
     if not name or len(name) > 50:
         raise HTTPException(status_code=400, detail="Name is required (max 50 chars)")
+
+    # Clear rate limit on successful auth
+    if RATE_LIMIT_ENABLED:
+        clear_rate_limit(client_ip)
 
     token = create_session_token()
     return {"valid": True, "token": token, "name": name}

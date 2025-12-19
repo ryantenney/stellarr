@@ -79,3 +79,21 @@ variable "waf_auth_rate_limit" {
     error_message = "AWS WAF rate limit minimum is 100 requests per 5-minute window."
   }
 }
+
+variable "enable_rate_limiting" {
+  description = "Enable Lambda-level rate limiting (alternative to WAF, use one or the other)"
+  type        = bool
+  default     = true
+}
+
+variable "rate_limit_max_attempts" {
+  description = "Maximum failed auth attempts per window before blocking"
+  type        = number
+  default     = 5
+}
+
+variable "rate_limit_window_seconds" {
+  description = "Rate limit window in seconds"
+  type        = number
+  default     = 900  # 15 minutes
+}
