@@ -26,13 +26,18 @@ docker run --rm --platform linux/arm64 \
     -v "$SCRIPT_DIR":/var/task \
     -v "$TEMP_DIR/package":/var/package \
     public.ecr.aws/lambda/python:3.12 \
-    -c "
+    -c '
         pip install -r /var/task/requirements.txt -t /var/package --quiet && \
         cp /var/task/*.py /var/package/ && \
         python -m compileall -b -q /var/package && \
-        find /var/package -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true && \
-        find /var/package -maxdepth 1 -name '*.py' -type f -delete
-    "
+        find /var/package -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
+        find /var/package -maxdepth 1 -name "*.py" -type f -delete && \
+        for dir in /var/package/*/; do \
+            if [ -d "$dir" ] && ! find "$dir" -name "*.so" -type f | grep -q .; then \
+                find "$dir" -name "*.py" -type f -delete; \
+            fi; \
+        done
+    '
 
 # Create zip
 cd "$TEMP_DIR/package"
