@@ -100,8 +100,8 @@ def sign_request(
     amz_date = t.strftime('%Y%m%dT%H%M%SZ')
     date_stamp = t.strftime('%Y%m%d')
 
-    # Create canonical headers
-    headers = dict(headers)  # Copy to avoid mutation
+    # Create canonical headers (all header names must be lowercase for signing)
+    headers = {k.lower(): v for k, v in headers.items()}  # Lowercase all keys
     headers['host'] = host
     headers['x-amz-date'] = amz_date
 
