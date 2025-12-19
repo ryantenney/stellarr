@@ -2,6 +2,8 @@
 Lightweight DynamoDB client using httpx + AWS SigV4.
 Replaces boto3 for ~70MB smaller Lambda packages.
 """
+from __future__ import annotations
+
 import json
 import os
 from typing import Any

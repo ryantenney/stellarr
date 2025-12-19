@@ -2,6 +2,8 @@
 AWS Signature Version 4 signing implementation.
 Replaces boto3/botocore for lightweight Lambda deployments.
 """
+from __future__ import annotations
+
 import hashlib
 import hmac
 import json

@@ -1,6 +1,8 @@
 """
 Database operations using lightweight DynamoDB client (no boto3).
 """
+from __future__ import annotations
+
 import os
 from datetime import datetime, timezone
 
