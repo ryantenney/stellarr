@@ -56,5 +56,4 @@ class TMDBClient:
     async def get_trending(self, media_type: str = "all", time_window: str = "week") -> dict:
         return await self._request(f"/trending/{media_type}/{time_window}")
 
-
 tmdb_client = TMDBClient()

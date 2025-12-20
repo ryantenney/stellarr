@@ -45,6 +45,26 @@ variable "feed_token" {
   default     = ""
 }
 
+variable "plex_webhook_token" {
+  description = "Token for Plex webhook authentication"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "plex_server_name" {
+  description = "Expected Plex server name for webhook validation (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "tvdb_api_key" {
+  description = "TVDB API key for episode-to-show lookups"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "lambda_memory" {
   description = "Lambda function memory in MB"
   type        = number

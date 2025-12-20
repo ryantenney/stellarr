@@ -14,15 +14,23 @@ hosted_zone_id = "Z1234567890ABC"  # Your Route53 hosted zone ID
 # preshared_password = "your-password"
 # feed_token         = "your-feed-token"
 
-# Aurora Serverless scaling
-db_min_capacity = 0.5   # Minimum ACUs (can scale to 0 with Aurora Serverless v2)
-db_max_capacity = 2     # Maximum ACUs
+# Plex webhook integration (optional)
+# plex_webhook_token = "your-plex-webhook-token"
+# plex_server_name   = "Your Plex Server Name"  # Must match Server.title in Plex webhooks
+
+# TVDB API (optional - enables episode-to-show lookup for better Plex matching)
+# tvdb_api_key = "your-tvdb-api-key"
 
 # Lambda configuration
-lambda_memory  = 512    # MB
-lambda_timeout = 30     # seconds
+lambda_memory  = 256    # MB
+lambda_timeout = 10     # seconds
 
 # AWS WAF (optional - adds ~$6-8/month)
 enable_waf          = false
 waf_rate_limit      = 100   # Requests per 5 min per IP (min: 100)
 waf_auth_rate_limit = 100   # Auth requests per 5 min per IP (min: 100)
+
+# Rate Limiting
+enable_rate_limiting       = true   # Toggle on/off
+rate_limit_max_attempts    = 5      # Failed attempts before block
+rate_limit_window_seconds  = 900    # 15 minutes

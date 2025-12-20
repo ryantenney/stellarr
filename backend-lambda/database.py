@@ -132,6 +132,81 @@ def is_requested(tmdb_id: int, media_type: str) -> bool:
         return False
 
 
+def mark_as_added(tmdb_id: int, media_type: str) -> bool:
+    """Mark a request as added to Plex library."""
+    try:
+        result = _get_client().update_item(
+            key={
+                'media_type': media_type,
+                'tmdb_id': tmdb_id
+            },
+            update_expression='SET added_at = :now',
+            condition_expression='attribute_exists(media_type) AND attribute_not_exists(added_at)',
+            expression_attribute_values={
+                ':now': datetime.now(timezone.utc).isoformat()
+            },
+            return_values='UPDATED_NEW'
+        )
+        return result is not None
+    except ConditionalCheckFailedException:
+        # Either item doesn't exist or already marked as added
+        return False
+    except Exception as e:
+        print(f"Error marking request as added: {e}", flush=True)
+        return False
+
+
+def find_by_tvdb_id(tvdb_id: int, media_type: str) -> dict | None:
+    """Find a request by TVDB ID."""
+    try:
+        # Query by media_type and filter by tvdb_id
+        items = _get_client().query(
+            key_condition_expression='media_type = :mt',
+            filter_expression='tvdb_id = :tvdb',
+            expression_attribute_values={
+                ':mt': media_type,
+                ':tvdb': tvdb_id
+            }
+        )
+        return items[0] if items else None
+    except Exception as e:
+        print(f"Error finding by tvdb_id: {e}", flush=True)
+        return None
+
+
+def find_by_plex_guid(plex_guid: str) -> dict | None:
+    """Find a request by Plex GUID."""
+    try:
+        # Scan with filter (plex_guid is not a key)
+        all_items = _get_client().scan(
+            filter_expression='plex_guid = :pg',
+            expression_attribute_values={':pg': plex_guid}
+        )
+        return all_items[0] if all_items else None
+    except Exception as e:
+        print(f"Error finding by plex_guid: {e}", flush=True)
+        return None
+
+
+def update_plex_guid(tmdb_id: int, media_type: str, plex_guid: str) -> bool:
+    """Cache a Plex GUID on a request for future matching."""
+    try:
+        _get_client().update_item(
+            key={
+                'media_type': media_type,
+                'tmdb_id': tmdb_id
+            },
+            update_expression='SET plex_guid = :pg',
+            expression_attribute_values={
+                ':pg': plex_guid
+            }
+        )
+        return True
+    except Exception as e:
+        print(f"Error updating plex_guid: {e}", flush=True)
+        return False
+
+
 # --- Rate Limiting ---
 
 def check_rate_limit(ip: str, max_attempts: int, window_seconds: int) -> tuple[bool, int]:

@@ -207,6 +207,28 @@ resource "aws_cloudfront_distribution" "main" {
     max_ttl     = 600
   }
 
+  # Webhook behavior (Plex webhooks)
+  ordered_cache_behavior {
+    path_pattern           = "/webhook/*"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "lambda-api"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+
+    forwarded_values {
+      query_string = true  # For token parameter
+      headers      = ["Content-Type"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
   # Custom error responses for SPA routing
   custom_error_response {
     error_code         = 404

@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     tmdb_base_url: str = "https://api.themoviedb.org/3"
     database_path: str = "/app/data/overseer.db"
     feed_token: str = ""  # Optional token for RSS/list endpoint protection
+    plex_webhook_token: str = ""  # Token for Plex webhook authentication
+    plex_server_name: str = ""  # Optional Plex server name for validation
+    tvdb_api_key: str = ""  # TVDB API key for episode-to-show lookups
 
     class Config:
         env_file = ".env"

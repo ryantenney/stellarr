@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query, Header
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query, Header, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
@@ -9,7 +9,11 @@ import base64
 import time
 
 from config import get_settings
-from database import init_db, add_request, remove_request, get_all_requests, is_requested
+from database import (
+    init_db, add_request, remove_request, get_all_requests, is_requested,
+    mark_as_added, find_by_tvdb_id, find_by_plex_guid, update_plex_guid
+)
+import json
 from tmdb import tmdb_client
 from rss import (
     generate_movie_rss,
@@ -114,6 +118,27 @@ def verify_feed_token(token: str | None = Query(None, alias="token")):
 
     if not secrets.compare_digest(token, settings.feed_token):
         raise HTTPException(status_code=401, detail="Invalid feed token")
+
+    return True
+
+
+def verify_plex_webhook_token(token: str | None = Query(None, alias="token")):
+    """Verify the Plex webhook token."""
+    if not settings.plex_webhook_token:
+        # No token configured - reject all requests for security
+        raise HTTPException(
+            status_code=401,
+            detail="Plex webhook not configured"
+        )
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Webhook token required. Add ?token=YOUR_TOKEN to the URL."
+        )
+
+    if not secrets.compare_digest(token, settings.plex_webhook_token):
+        raise HTTPException(status_code=401, detail="Invalid webhook token")
 
     return True
 
@@ -410,3 +435,98 @@ async def get_feed_info(request: Request):
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "overseer-lite"}
+
+
+# --- Plex Webhook ---
+
+@app.post("/webhook/plex")
+async def plex_webhook(
+    payload: str = Form(...),
+    _: bool = Depends(verify_plex_webhook_token)
+):
+    """
+    Handle Plex webhook notifications.
+
+    Plex sends webhooks as multipart/form-data with:
+    - payload: JSON string containing the event data
+    - thumb: (optional) thumbnail image
+
+    Configure in Plex: Settings -> Webhooks -> Add
+    URL: https://your-domain.com/webhook/plex?token=YOUR_PLEX_WEBHOOK_TOKEN
+    """
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # Check event type - only process library.new
+    event = data.get('event', '')
+    if event != 'library.new':
+        return {"status": "ignored", "reason": f"Event type '{event}' not processed"}
+
+    # Validate server name if configured
+    if settings.plex_server_name:
+        server_title = data.get('Server', {}).get('title', '')
+        if server_title != settings.plex_server_name:
+            return {"status": "ignored", "reason": "Server name mismatch"}
+
+    # Parse the payload
+    from plex import parse_plex_payload
+    media = parse_plex_payload(data)
+
+    if not media:
+        return {"status": "ignored", "reason": "Unsupported media type"}
+
+    # Try to match and update request using our matching strategy
+    matched = False
+    matched_request = None
+
+    # 1. Try TMDB ID (most reliable for movies and shows)
+    if media.tmdb_id:
+        matched = await mark_as_added(media.tmdb_id, media.media_type)
+        if matched:
+            # If we matched and have a plex_guid, cache it for future
+            if media.plex_guid:
+                await update_plex_guid(media.tmdb_id, media.media_type, media.plex_guid)
+
+    # 2. Try TVDB ID (common for TV shows)
+    if not matched and media.tvdb_id and media.media_type == 'tv':
+        matched_request = await find_by_tvdb_id(media.tvdb_id, media.media_type)
+        if matched_request:
+            matched = await mark_as_added(matched_request['tmdb_id'], media.media_type)
+            if matched and media.plex_guid:
+                await update_plex_guid(matched_request['tmdb_id'], media.media_type, media.plex_guid)
+
+    # 3. Try Plex GUID (for episodes/seasons using cached show GUID)
+    if not matched and media.plex_guid:
+        matched_request = await find_by_plex_guid(media.plex_guid)
+        if matched_request:
+            matched = await mark_as_added(matched_request['tmdb_id'], matched_request['media_type'])
+
+    # 4. Try TVDB reverse lookup (episode TVDB ID → show TVDB ID)
+    if not matched and media.episode_tvdb_id:
+        from tvdb import get_series_id_from_episode
+        show_tvdb_id = await get_series_id_from_episode(media.episode_tvdb_id)
+        if show_tvdb_id:
+            matched_request = await find_by_tvdb_id(show_tvdb_id, 'tv')
+            if matched_request:
+                matched = await mark_as_added(matched_request['tmdb_id'], 'tv')
+                if matched and media.plex_guid:
+                    await update_plex_guid(matched_request['tmdb_id'], 'tv', media.plex_guid)
+
+    if matched:
+        return {
+            "status": "success",
+            "matched": True,
+            "title": media.title,
+            "media_type": media.media_type,
+            "tmdb_id": media.tmdb_id or (matched_request['tmdb_id'] if matched_request else None)
+        }
+    else:
+        return {
+            "status": "success",
+            "matched": False,
+            "reason": "No matching request found",
+            "title": media.title,
+            "media_type": media.media_type
+        }

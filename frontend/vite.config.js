@@ -6,7 +6,9 @@ export default defineConfig({
 	server: {
 		proxy: {
 			'/api': 'http://localhost:8000',
-			'/rss': 'http://localhost:8000'
+			'/rss': 'http://localhost:8000',
+			'/list': 'http://localhost:8000',
+			'/webhook': 'http://localhost:8000',
 		}
 	}
 });

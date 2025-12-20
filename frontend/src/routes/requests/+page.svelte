@@ -7,10 +7,36 @@
 	let requests = [];
 	let feedInfo = null;
 	let mediaFilter = 'all';
+	let statusFilter = 'all'; // 'all', 'pending', 'added'
 	let showFeedModal = false;
 	let showConfirmModal = false;
 	let itemToRemove = null;
 	let removing = false;
+
+	// Pagination
+	let currentPage = 1;
+	const itemsPerPage = 20;
+
+	// Computed: filtered by status (client-side)
+	$: filteredByStatus = statusFilter === 'all'
+		? requests
+		: statusFilter === 'added'
+			? requests.filter(r => r.added_at)
+			: requests.filter(r => !r.added_at);
+
+	// Computed: pagination
+	$: totalPages = Math.ceil(filteredByStatus.length / itemsPerPage);
+	$: paginatedItems = filteredByStatus.slice(
+		(currentPage - 1) * itemsPerPage,
+		currentPage * itemsPerPage
+	);
+
+	// Reset page when filters change
+	$: if (mediaFilter || statusFilter) currentPage = 1;
+
+	// Counts for filter buttons
+	$: pendingCount = requests.filter(r => !r.added_at).length;
+	$: addedCount = requests.filter(r => r.added_at).length;
 
 	onMount(async () => {
 		if (!$authenticated) {
@@ -121,25 +147,48 @@
 			</div>
 		{/if}
 
-		<div class="filter-buttons">
-			<button
-				class:active={mediaFilter === 'all'}
-				on:click={() => { mediaFilter = 'all'; loadRequests(); }}
-			>
-				All ({requests.length})
-			</button>
-			<button
-				class:active={mediaFilter === 'movie'}
-				on:click={() => { mediaFilter = 'movie'; loadRequests(); }}
-			>
-				Movies
-			</button>
-			<button
-				class:active={mediaFilter === 'tv'}
-				on:click={() => { mediaFilter = 'tv'; loadRequests(); }}
-			>
-				TV Shows
-			</button>
+		<div class="filters-row">
+			<div class="filter-buttons">
+				<button
+					class:active={mediaFilter === 'all'}
+					on:click={() => { mediaFilter = 'all'; loadRequests(); }}
+				>
+					All ({requests.length})
+				</button>
+				<button
+					class:active={mediaFilter === 'movie'}
+					on:click={() => { mediaFilter = 'movie'; loadRequests(); }}
+				>
+					Movies
+				</button>
+				<button
+					class:active={mediaFilter === 'tv'}
+					on:click={() => { mediaFilter = 'tv'; loadRequests(); }}
+				>
+					TV Shows
+				</button>
+			</div>
+
+			<div class="filter-buttons status-filter">
+				<button
+					class:active={statusFilter === 'all'}
+					on:click={() => statusFilter = 'all'}
+				>
+					All Status
+				</button>
+				<button
+					class:active={statusFilter === 'pending'}
+					on:click={() => statusFilter = 'pending'}
+				>
+					Pending ({pendingCount})
+				</button>
+				<button
+					class:active={statusFilter === 'added'}
+					on:click={() => statusFilter = 'added'}
+				>
+					Added ({addedCount})
+				</button>
+			</div>
 		</div>
 
 		{#if $loading}
@@ -149,14 +198,21 @@
 				<p>No requests yet</p>
 				<a href="/">Browse and add some!</a>
 			</div>
+		{:else if filteredByStatus.length === 0}
+			<div class="empty-state">
+				<p>No {statusFilter === 'pending' ? 'pending' : 'added'} requests</p>
+			</div>
 		{:else}
 			<div class="requests-grid">
-				{#each requests as item (`${item.media_type}-${item.tmdb_id}`)}
-					<div class="request-card" class:has-warning={getMissingIdWarning(item)}>
+				{#each paginatedItems as item (`${item.media_type}-${item.tmdb_id}`)}
+					<div class="request-card" class:has-warning={getMissingIdWarning(item)} class:is-added={item.added_at}>
 						<div class="poster">
 							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
 							<div class="media-type-badge">{item.media_type === 'tv' ? 'TV' : 'Movie'}</div>
-							{#if getMissingIdWarning(item)}
+							{#if item.added_at}
+								<div class="added-badge" title="Added to Plex on {formatDate(item.added_at)}">✓</div>
+							{/if}
+							{#if getMissingIdWarning(item) && !item.added_at}
 								<div class="warning-badge" title={getMissingIdWarning(item)}>!</div>
 							{/if}
 						</div>
@@ -166,10 +222,12 @@
 							<p class="overview">{item.overview || 'No description available'}</p>
 							<div class="meta">
 								<span class="date">
-									{#if item.requested_by}
+									{#if item.added_at}
+										Added to Plex: {formatDate(item.added_at)}
+									{:else if item.requested_by}
 										{item.requested_by} · {formatDate(item.created_at)}
 									{:else}
-										Added: {formatDate(item.created_at)}
+										Requested: {formatDate(item.created_at)}
 									{/if}
 								</span>
 								{#if item.imdb_id}
@@ -193,6 +251,24 @@
 					</div>
 				{/each}
 			</div>
+
+			{#if totalPages > 1}
+				<div class="pagination">
+					<button
+						disabled={currentPage === 1}
+						on:click={() => currentPage--}
+					>
+						Previous
+					</button>
+					<span>Page {currentPage} of {totalPages}</span>
+					<button
+						disabled={currentPage === totalPages}
+						on:click={() => currentPage++}
+					>
+						Next
+					</button>
+				</div>
+			{/if}
 		{/if}
 	</div>
 
@@ -327,10 +403,21 @@
 		font-size: 0.9rem;
 	}
 
+	.filters-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
+		align-items: center;
+	}
+
 	.filter-buttons {
 		display: flex;
 		gap: 0.5rem;
-		margin-bottom: 1.5rem;
+	}
+
+	.status-filter {
+		margin-left: auto;
 	}
 
 	.filter-buttons button {
@@ -409,6 +496,23 @@
 		font-weight: 600;
 	}
 
+	.added-badge {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		background: var(--success);
+		color: white;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 700;
+		font-size: 0.9rem;
+		cursor: help;
+	}
+
 	.warning-badge {
 		position: absolute;
 		top: 0.5rem;
@@ -426,8 +530,20 @@
 		cursor: help;
 	}
 
-	.request-card.has-warning {
+	.request-card.has-warning:not(.is-added) {
 		border: 1px solid var(--warning);
+	}
+
+	.request-card.is-added {
+		opacity: 0.85;
+	}
+
+	.request-card.is-added .poster::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(to bottom, rgba(16, 185, 129, 0.1), transparent);
+		pointer-events: none;
 	}
 
 	.info {
@@ -708,11 +824,54 @@
 		cursor: not-allowed;
 	}
 
+	/* Pagination */
+	.pagination {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 1rem;
+		margin-top: 2rem;
+		padding: 1rem;
+	}
+
+	.pagination button {
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		background: transparent;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.pagination button:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.pagination button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.pagination span {
+		color: var(--text-secondary);
+	}
+
 	@media (max-width: 768px) {
 		.header {
 			flex-direction: column;
 			align-items: flex-start;
 			gap: 1rem;
+		}
+
+		.filters-row {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.status-filter {
+			margin-left: 0;
 		}
 
 		.requests-grid {

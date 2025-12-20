@@ -16,9 +16,12 @@ resource "aws_secretsmanager_secret" "app_config" {
 resource "aws_secretsmanager_secret_version" "app_config" {
   secret_id = aws_secretsmanager_secret.app_config.id
   secret_string = jsonencode({
-    APP_SECRET_KEY     = random_password.app_secret.result
-    PRESHARED_PASSWORD = var.preshared_password
-    TMDB_API_KEY       = var.tmdb_api_key
-    FEED_TOKEN         = var.feed_token
+    APP_SECRET_KEY       = random_password.app_secret.result
+    PRESHARED_PASSWORD   = var.preshared_password
+    TMDB_API_KEY         = var.tmdb_api_key
+    FEED_TOKEN           = var.feed_token
+    PLEX_WEBHOOK_TOKEN   = var.plex_webhook_token
+    PLEX_SERVER_NAME     = var.plex_server_name
+    TVDB_API_KEY         = var.tvdb_api_key
   })
 }

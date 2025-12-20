@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     preshared_password: str = ""
     tmdb_api_key: str = ""
     feed_token: str = ""
+    plex_webhook_token: str = ""
+    plex_server_name: str = ""
+    tvdb_api_key: str = ""
 
     # TMDB
     tmdb_base_url: str = "https://api.themoviedb.org/3"
@@ -33,6 +36,9 @@ class Settings(BaseSettings):
             self.preshared_password = app_config.get('PRESHARED_PASSWORD', '')
             self.tmdb_api_key = app_config.get('TMDB_API_KEY', '')
             self.feed_token = app_config.get('FEED_TOKEN', '')
+            self.plex_webhook_token = app_config.get('PLEX_WEBHOOK_TOKEN', '')
+            self.plex_server_name = app_config.get('PLEX_SERVER_NAME', '')
+            self.tvdb_api_key = app_config.get('TVDB_API_KEY', '')
         else:
             print("DEBUG: WARNING - APP_SECRET_ARN not set", flush=True)
 

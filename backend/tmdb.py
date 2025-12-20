@@ -70,5 +70,4 @@ class TMDBClient:
         """Get popular TV shows."""
         return await self._request("/tv/popular", {"page": page})
 
-
 tmdb_client = TMDBClient()

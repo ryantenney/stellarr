@@ -23,9 +23,20 @@ async def init_db():
                 imdb_id TEXT,
                 tvdb_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                added_at TIMESTAMP,
+                plex_guid TEXT,
                 UNIQUE(tmdb_id, media_type)
             )
         """)
+
+        # Migration: Add new columns if missing (for existing databases)
+        cursor = await db.execute("PRAGMA table_info(requests)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        if 'added_at' not in columns:
+            await db.execute("ALTER TABLE requests ADD COLUMN added_at TIMESTAMP")
+        if 'plex_guid' not in columns:
+            await db.execute("ALTER TABLE requests ADD COLUMN plex_guid TEXT")
+
         await db.commit()
 
 
@@ -105,3 +116,65 @@ async def is_requested(tmdb_id: int, media_type: str) -> bool:
         )
         row = await cursor.fetchone()
         return row is not None
+
+
+async def mark_as_added(tmdb_id: int, media_type: str) -> bool:
+    """Mark a request as added to Plex library."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        try:
+            cursor = await db.execute(
+                """
+                UPDATE requests
+                SET added_at = CURRENT_TIMESTAMP
+                WHERE tmdb_id = ? AND media_type = ? AND added_at IS NULL
+                """,
+                (tmdb_id, media_type)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error marking request as added: {e}")
+            return False
+
+
+async def find_by_tvdb_id(tvdb_id: int, media_type: str) -> dict | None:
+    """Find a request by TVDB ID."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM requests WHERE tvdb_id = ? AND media_type = ?",
+            (tvdb_id, media_type)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def find_by_plex_guid(plex_guid: str) -> dict | None:
+    """Find a request by Plex GUID."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM requests WHERE plex_guid = ?",
+            (plex_guid,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def update_plex_guid(tmdb_id: int, media_type: str, plex_guid: str) -> bool:
+    """Cache a Plex GUID on a request for future matching."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        try:
+            await db.execute(
+                """
+                UPDATE requests
+                SET plex_guid = ?
+                WHERE tmdb_id = ? AND media_type = ?
+                """,
+                (plex_guid, tmdb_id, media_type)
+            )
+            await db.commit()
+            return True
+        except Exception as e:
+            print(f"Error updating plex_guid: {e}")
+            return False
