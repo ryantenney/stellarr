@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { authenticated, loading, addToast, setAuthenticated } from '$lib/stores.js';
 	import { verifyPassword, search, getTrending, addRequest } from '$lib/api.js';
 
@@ -11,9 +11,46 @@
 	let mediaFilter = 'all';
 	let searchTimeout;
 
+	// Pagination - dynamic based on grid columns
+	let currentPage = 1;
+	let gridContainer;
+	let columnCount = 5;
+	const rowsPerPage = 4;
+	$: itemsPerPage = columnCount * rowsPerPage;
+	$: totalPages = Math.ceil(displayResults.length / itemsPerPage);
+	$: paginatedResults = displayResults.slice(
+		(currentPage - 1) * itemsPerPage,
+		currentPage * itemsPerPage
+	);
+
+	function updateColumnCount() {
+		if (!gridContainer) return;
+		const containerWidth = gridContainer.offsetWidth;
+		const gap = 24; // 1.5rem gap
+		const minCardWidth = 180;
+		columnCount = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
+	}
+
+	let resizeObserver;
+
 	onMount(async () => {
 		if ($authenticated) {
 			await loadTrending();
+		}
+	});
+
+	// Set up resize observer when grid container becomes available
+	$: if (gridContainer && !resizeObserver) {
+		updateColumnCount();
+		resizeObserver = new ResizeObserver(() => {
+			updateColumnCount();
+		});
+		resizeObserver.observe(gridContainer);
+	}
+
+	onDestroy(() => {
+		if (resizeObserver) {
+			resizeObserver.disconnect();
 		}
 	});
 
@@ -86,6 +123,9 @@
 
 	$: displayResults = searchQuery.trim() ? searchResults : trendingResults;
 	$: sectionTitle = searchQuery.trim() ? 'Search Results' : 'Trending';
+
+	// Reset page when search/filter changes
+	$: if (searchQuery || mediaFilter) currentPage = 1;
 </script>
 
 {#if !$authenticated}
@@ -146,19 +186,27 @@
 
 	<section class="results-section">
 		<h2>{sectionTitle}</h2>
+		<div class="grid-wrapper" bind:this={gridContainer}>
 		{#if $loading}
 			<div class="loading">Loading...</div>
 		{:else if displayResults.length === 0}
 			<p class="no-results">No results found</p>
 		{:else}
 			<div class="media-grid">
-				{#each displayResults as item (item.id + item.media_type)}
+				{#each paginatedResults as item (item.id + item.media_type)}
 					<div class="media-card">
 						<div class="poster">
 							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
 							<div class="media-type-badge">{item.media_type === 'tv' ? 'TV' : 'Movie'}</div>
 							{#if item.vote_average}
 								<div class="rating-badge">{item.vote_average.toFixed(1)}</div>
+							{/if}
+							{#if item.in_library}
+								<div class="library-badge" title="Already in Plex">In Library</div>
+							{:else if item.number_of_seasons && item.number_of_seasons > 6}
+								<div class="seasons-warning" title="Large series - {item.number_of_seasons} seasons may take a while to download">
+									{item.number_of_seasons} Seasons
+								</div>
 							{/if}
 						</div>
 						<div class="info">
@@ -168,16 +216,42 @@
 							<button
 								class="request-btn"
 								class:requested={item.requested}
+								class:in-library={item.in_library}
 								on:click={() => handleRequest(item)}
-								disabled={item.requested}
+								disabled={item.requested || item.in_library}
 							>
-								{item.requested ? '✓ Requested' : '+ Request'}
+								{#if item.in_library}
+									In Library
+								{:else if item.requested}
+									✓ Requested
+								{:else}
+									+ Request
+								{/if}
 							</button>
 						</div>
 					</div>
 				{/each}
 			</div>
+
+			{#if totalPages > 1}
+				<div class="pagination">
+					<button
+						disabled={currentPage === 1}
+						on:click={() => currentPage--}
+					>
+						Previous
+					</button>
+					<span>Page {currentPage} of {totalPages}</span>
+					<button
+						disabled={currentPage === totalPages}
+						on:click={() => currentPage++}
+					>
+						Next
+					</button>
+				</div>
+			{/if}
 		{/if}
+		</div>
 	</section>
 {/if}
 
@@ -314,12 +388,11 @@
 		background: var(--bg-secondary);
 		border-radius: 0.75rem;
 		overflow: hidden;
-		transition: transform 0.2s, box-shadow 0.2s;
+		transition: box-shadow 0.2s;
 	}
 
 	.media-card:hover {
-		transform: translateY(-4px);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 
 	.poster {
@@ -354,6 +427,31 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: #ffd700;
+	}
+
+	.library-badge {
+		position: absolute;
+		bottom: 0.5rem;
+		left: 0.5rem;
+		background: rgba(76, 175, 80, 0.9);
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: white;
+	}
+
+	.seasons-warning {
+		position: absolute;
+		bottom: 0.5rem;
+		left: 0.5rem;
+		background: rgba(245, 158, 11, 0.9);
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: white;
+		cursor: help;
 	}
 
 	.info {
@@ -405,8 +503,48 @@
 		cursor: default;
 	}
 
+	.request-btn.in-library {
+		background: var(--bg-tertiary);
+		color: var(--text-secondary);
+		cursor: default;
+	}
+
 	.request-btn:disabled {
 		opacity: 0.8;
+	}
+
+	/* Pagination */
+	.pagination {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 1rem;
+		margin-top: 2rem;
+		padding: 1rem;
+	}
+
+	.pagination button {
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		background: transparent;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.pagination button:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.pagination button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.pagination span {
+		color: var(--text-secondary);
 	}
 
 	@media (max-width: 768px) {

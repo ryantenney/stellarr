@@ -219,6 +219,7 @@ class DynamoDBClient:
         key: dict,
         update_expression: str,
         expression_attribute_values: dict,
+        condition_expression: str = None,
         return_values: str = 'NONE',
     ) -> dict | None:
         """Update an item with an update expression."""
@@ -231,6 +232,9 @@ class DynamoDBClient:
             },
             'ReturnValues': return_values,
         }
+
+        if condition_expression:
+            payload['ConditionExpression'] = condition_expression
 
         response = self._request('UpdateItem', payload)
 

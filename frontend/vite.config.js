@@ -9,6 +9,7 @@ export default defineConfig({
 			'/rss': 'http://localhost:8000',
 			'/list': 'http://localhost:8000',
 			'/webhook': 'http://localhost:8000',
+			'/sync': 'http://localhost:8000'
 		}
 	}
 });

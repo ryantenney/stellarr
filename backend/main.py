@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query, H
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
+import asyncio
 import secrets
 import hmac
 import hashlib
@@ -11,7 +12,8 @@ import time
 from config import get_settings
 from database import (
     init_db, add_request, remove_request, get_all_requests, is_requested,
-    mark_as_added, find_by_tvdb_id, find_by_plex_guid, update_plex_guid
+    mark_as_added, find_by_tvdb_id, find_by_plex_guid, update_plex_guid,
+    sync_library, is_in_library
 )
 import json
 from tmdb import tmdb_client
@@ -177,8 +179,10 @@ async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
         else:
             results = await tmdb_client.search_multi(data.query, data.page)
 
-        # Filter out person results and add requested status
-        filtered_results = []
+        # Filter out person results and prepare items
+        items = []
+        tv_shows_to_fetch = []  # (index, tmdb_id) for TV shows needing season count
+
         for item in results.get("results", []):
             if item.get("media_type") == "person":
                 continue
@@ -195,8 +199,9 @@ async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
                 year = item.get("release_date", "")[:4] if item.get("release_date") else None
 
             requested = await is_requested(tmdb_id, media_type)
+            in_library = await is_in_library(tmdb_id, media_type)
 
-            filtered_results.append({
+            item_data = {
                 "id": tmdb_id,
                 "title": title,
                 "year": int(year) if year else None,
@@ -204,11 +209,33 @@ async def search(data: SearchQuery, _: bool = Depends(verify_session_token)):
                 "poster_path": item.get("poster_path"),
                 "media_type": media_type,
                 "vote_average": item.get("vote_average"),
-                "requested": requested
-            })
+                "requested": requested,
+                "in_library": in_library,
+                "number_of_seasons": None
+            }
+            items.append(item_data)
+
+            # Track TV shows that aren't already requested/in_library for season fetch
+            if media_type == "tv" and not requested and not in_library:
+                tv_shows_to_fetch.append((len(items) - 1, tmdb_id))
+
+        # Fetch season counts for TV shows in parallel
+        if tv_shows_to_fetch:
+            async def fetch_seasons(idx, show_id):
+                try:
+                    details = await tmdb_client.get_tv(show_id)
+                    return idx, details.get("number_of_seasons")
+                except Exception:
+                    return idx, None
+
+            season_results = await asyncio.gather(
+                *[fetch_seasons(idx, show_id) for idx, show_id in tv_shows_to_fetch]
+            )
+            for idx, num_seasons in season_results:
+                items[idx]["number_of_seasons"] = num_seasons
 
         return {
-            "results": filtered_results,
+            "results": items,
             "page": results.get("page", 1),
             "total_pages": results.get("total_pages", 1),
             "total_results": results.get("total_results", 0)
@@ -286,6 +313,8 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
         results = await tmdb_client.get_trending(media_type)
 
         items = []
+        tv_shows_to_fetch = []  # (index, tmdb_id) for TV shows needing season count
+
         for item in results.get("results", []):
             item_type = item.get("media_type", media_type if media_type != "all" else "movie")
             tmdb_id = item.get("id")
@@ -298,8 +327,9 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
                 year = item.get("release_date", "")[:4] if item.get("release_date") else None
 
             requested = await is_requested(tmdb_id, item_type)
+            in_library = await is_in_library(tmdb_id, item_type)
 
-            items.append({
+            item_data = {
                 "id": tmdb_id,
                 "title": title,
                 "year": int(year) if year else None,
@@ -307,10 +337,36 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
                 "poster_path": item.get("poster_path"),
                 "media_type": item_type,
                 "vote_average": item.get("vote_average"),
-                "requested": requested
-            })
+                "requested": requested,
+                "in_library": in_library,
+                "number_of_seasons": None
+            }
+            items.append(item_data)
 
-        return {"results": items}
+            # Track TV shows that aren't already requested/in_library for season fetch
+            if item_type == "tv" and not requested and not in_library:
+                tv_shows_to_fetch.append((len(items) - 1, tmdb_id))
+
+        # Fetch season counts for TV shows in parallel
+        if tv_shows_to_fetch:
+            async def fetch_seasons(idx, show_id):
+                try:
+                    details = await tmdb_client.get_tv(show_id)
+                    return idx, details.get("number_of_seasons")
+                except Exception:
+                    return idx, None
+
+            season_results = await asyncio.gather(
+                *[fetch_seasons(idx, show_id) for idx, show_id in tv_shows_to_fetch]
+            )
+            for idx, num_seasons in season_results:
+                items[idx]["number_of_seasons"] = num_seasons
+
+        return Response(
+            content=json.dumps({"results": items}),
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=3600"}  # 1 hour
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -530,3 +586,53 @@ async def plex_webhook(
             "title": media.title,
             "media_type": media.media_type
         }
+
+
+# --- Library Sync ---
+
+@app.post("/sync/library")
+async def sync_library_endpoint(
+    request: Request,
+    media_type: str = Query(..., description="Media type: 'movie' or 'tv'"),
+    clear: bool = Query(False, description="Clear existing library items before syncing"),
+    _: bool = Depends(verify_plex_webhook_token)
+):
+    """
+    Sync Plex library contents for a media type.
+
+    Receives a JSON array of library items and updates the local library cache.
+    Also marks any matching requests as added.
+
+    Configure sync script to POST to:
+    https://your-domain.com/sync/library?media_type=movie&token=YOUR_PLEX_WEBHOOK_TOKEN
+
+    Add &clear=true on first batch to clear existing items.
+    """
+    if media_type not in ('movie', 'tv'):
+        raise HTTPException(status_code=400, detail="media_type must be 'movie' or 'tv'")
+
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not isinstance(data, list):
+        raise HTTPException(status_code=400, detail="Body must be a JSON array")
+
+    # Sync the library
+    count = await sync_library(data, media_type, clear_first=clear)
+
+    # Mark any matching requests as added
+    marked = 0
+    for item in data:
+        tmdb_id = item.get('tmdb_id')
+        if tmdb_id:
+            if await mark_as_added(tmdb_id, media_type):
+                marked += 1
+
+    return {
+        "status": "success",
+        "synced": count,
+        "marked_as_added": marked,
+        "media_type": media_type
+    }

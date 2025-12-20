@@ -144,7 +144,29 @@ resource "aws_cloudfront_distribution" "main" {
     max_ttl     = 86400
   }
 
-  # API behavior
+  # Trending API - cached (TMDB data changes slowly)
+  ordered_cache_behavior {
+    path_pattern           = "/api/trending*"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "lambda-api"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+
+    forwarded_values {
+      query_string = true   # For media_type parameter
+      headers      = ["Authorization"]  # Include in cache key
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 900   # 15 minutes minimum
+    default_ttl = 3600  # 1 hour default
+    max_ttl     = 86400 # 24 hours max
+  }
+
+  # API behavior (other endpoints - no caching)
   ordered_cache_behavior {
     path_pattern           = "/api/*"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
@@ -218,6 +240,28 @@ resource "aws_cloudfront_distribution" "main" {
 
     forwarded_values {
       query_string = true  # For token parameter
+      headers      = ["Content-Type"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  # Sync behavior (library sync)
+  ordered_cache_behavior {
+    path_pattern           = "/sync/*"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "lambda-api"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+
+    forwarded_values {
+      query_string = true  # For token and media_type parameters
       headers      = ["Content-Type"]
       cookies {
         forward = "none"

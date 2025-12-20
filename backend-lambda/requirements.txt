@@ -1,6 +1,7 @@
 # FastAPI and ASGI
 fastapi==0.109.0
 mangum==0.17.0
+python-multipart==0.0.9
 
 # HTTP client (also used for DynamoDB via lightweight client)
 httpx==0.26.0

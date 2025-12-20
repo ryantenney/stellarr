@@ -29,6 +29,18 @@ async def init_db():
             )
         """)
 
+        # Library table for tracking items in Plex
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS library (
+                tmdb_id INTEGER NOT NULL,
+                media_type TEXT NOT NULL,
+                tvdb_id INTEGER,
+                title TEXT,
+                synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (tmdb_id, media_type)
+            )
+        """)
+
         # Migration: Add new columns if missing (for existing databases)
         cursor = await db.execute("PRAGMA table_info(requests)")
         columns = [row[1] for row in await cursor.fetchall()]
@@ -178,3 +190,63 @@ async def update_plex_guid(tmdb_id: int, media_type: str, plex_guid: str) -> boo
         except Exception as e:
             print(f"Error updating plex_guid: {e}")
             return False
+
+
+# --- Library Functions ---
+
+async def sync_library(items: list[dict], media_type: str, clear_first: bool = False) -> int:
+    """
+    Sync library items for a media type.
+    Upserts items (additive by default).
+    Set clear_first=True to delete all existing items before inserting.
+    Returns count of items synced.
+    """
+    async with aiosqlite.connect(settings.database_path) as db:
+        try:
+            # Optionally clear existing items first
+            if clear_first:
+                await db.execute(
+                    "DELETE FROM library WHERE media_type = ?",
+                    (media_type,)
+                )
+
+            # Insert/update items
+            for item in items:
+                await db.execute(
+                    """
+                    INSERT OR REPLACE INTO library (tmdb_id, media_type, tvdb_id, title)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (item['tmdb_id'], media_type, item.get('tvdb_id'), item.get('title'))
+                )
+
+            await db.commit()
+            return len(items)
+        except Exception as e:
+            print(f"Error syncing library: {e}")
+            return 0
+
+
+async def is_in_library(tmdb_id: int, media_type: str) -> bool:
+    """Check if an item exists in the Plex library."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        cursor = await db.execute(
+            "SELECT 1 FROM library WHERE tmdb_id = ? AND media_type = ?",
+            (tmdb_id, media_type)
+        )
+        row = await cursor.fetchone()
+        return row is not None
+
+
+async def get_library_ids(media_type: str | None = None) -> set[tuple[int, str]]:
+    """Get all (tmdb_id, media_type) pairs in library for batch checking."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        if media_type:
+            cursor = await db.execute(
+                "SELECT tmdb_id, media_type FROM library WHERE media_type = ?",
+                (media_type,)
+            )
+        else:
+            cursor = await db.execute("SELECT tmdb_id, media_type FROM library")
+        rows = await cursor.fetchall()
+        return {(row[0], row[1]) for row in rows}

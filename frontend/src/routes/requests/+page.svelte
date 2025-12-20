@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { authenticated, loading, addToast } from '$lib/stores.js';
 	import { getRequests, removeRequest, getFeedInfo } from '$lib/api.js';
 	import { goto } from '$app/navigation';
@@ -7,15 +7,29 @@
 	let requests = [];
 	let feedInfo = null;
 	let mediaFilter = 'all';
-	let statusFilter = 'all'; // 'all', 'pending', 'added'
+	let statusFilter = 'pending'; // 'all', 'pending', 'added'
 	let showFeedModal = false;
 	let showConfirmModal = false;
 	let itemToRemove = null;
 	let removing = false;
 
-	// Pagination
+	// Pagination - dynamic based on grid columns
 	let currentPage = 1;
-	const itemsPerPage = 20;
+	let gridContainer;
+	let columnCount = 5;
+	const rowsPerPage = 4;
+	$: itemsPerPage = columnCount * rowsPerPage;
+
+	function updateColumnCount() {
+		if (!gridContainer) return;
+		const containerWidth = gridContainer.offsetWidth;
+		const gap = 24; // 1.5rem gap
+		const minCardWidth = 180;
+		// Calculate how many columns fit
+		columnCount = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
+	}
+
+	let resizeObserver;
 
 	// Computed: filtered by status (client-side)
 	$: filteredByStatus = statusFilter === 'all'
@@ -44,6 +58,21 @@
 			return;
 		}
 		await Promise.all([loadRequests(), loadFeedInfo()]);
+	});
+
+	// Set up resize observer when grid container becomes available
+	$: if (gridContainer && !resizeObserver) {
+		updateColumnCount();
+		resizeObserver = new ResizeObserver(() => {
+			updateColumnCount();
+		});
+		resizeObserver.observe(gridContainer);
+	}
+
+	onDestroy(() => {
+		if (resizeObserver) {
+			resizeObserver.disconnect();
+		}
 	});
 
 	async function loadRequests() {
@@ -135,7 +164,7 @@
 {#if $authenticated}
 	<div class="requests-page">
 		<div class="header">
-			<h1>My Requests</h1>
+			<h1>Requests</h1>
 			<button class="feeds-btn" on:click={() => showFeedModal = true}>
 				Feed URLs
 			</button>
@@ -191,6 +220,7 @@
 			</div>
 		</div>
 
+		<div class="grid-wrapper" bind:this={gridContainer}>
 		{#if $loading}
 			<div class="loading">Loading...</div>
 		{:else if requests.length === 0}
@@ -210,11 +240,18 @@
 							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
 							<div class="media-type-badge">{item.media_type === 'tv' ? 'TV' : 'Movie'}</div>
 							{#if item.added_at}
-								<div class="added-badge" title="Added to Plex on {formatDate(item.added_at)}">✓</div>
+								<div class="status-badge in-library" title="Added to Plex on {formatDate(item.added_at)}">In Library</div>
+							{:else}
+								<div class="status-badge requested">Requested</div>
 							{/if}
 							{#if getMissingIdWarning(item) && !item.added_at}
 								<div class="warning-badge" title={getMissingIdWarning(item)}>!</div>
 							{/if}
+							<button
+								class="remove-icon"
+								on:click={() => handleRemove(item)}
+								title="Remove request"
+							>×</button>
 						</div>
 						<div class="info">
 							<h3 title={item.title}>{item.title}</h3>
@@ -223,7 +260,7 @@
 							<div class="meta">
 								<span class="date">
 									{#if item.added_at}
-										Added to Plex: {formatDate(item.added_at)}
+										Added: {formatDate(item.added_at)}
 									{:else if item.requested_by}
 										{item.requested_by} · {formatDate(item.created_at)}
 									{:else}
@@ -241,12 +278,6 @@
 									</a>
 								{/if}
 							</div>
-							<button
-								class="remove-btn"
-								on:click={() => handleRemove(item)}
-							>
-								Remove
-							</button>
 						</div>
 					</div>
 				{/each}
@@ -270,6 +301,7 @@
 				</div>
 			{/if}
 		{/if}
+		</div>
 	</div>
 
 	<!-- Confirm Remove Modal -->
@@ -466,12 +498,11 @@
 		background: var(--bg-secondary);
 		border-radius: 0.75rem;
 		overflow: hidden;
-		transition: transform 0.2s, box-shadow 0.2s;
+		transition: box-shadow 0.2s;
 	}
 
 	.request-card:hover {
-		transform: translateY(-4px);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 
 	.poster {
@@ -496,21 +527,23 @@
 		font-weight: 600;
 	}
 
-	.added-badge {
+	.status-badge {
 		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-		background: var(--success);
+		bottom: 0.5rem;
+		left: 0.5rem;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		font-size: 0.7rem;
+		font-weight: 600;
 		color: white;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 700;
-		font-size: 0.9rem;
-		cursor: help;
+	}
+
+	.status-badge.requested {
+		background: rgba(100, 100, 100, 0.9);
+	}
+
+	.status-badge.in-library {
+		background: rgba(76, 175, 80, 0.9);
 	}
 
 	.warning-badge {
@@ -528,6 +561,34 @@
 		font-weight: 700;
 		font-size: 1rem;
 		cursor: help;
+	}
+
+	.remove-icon {
+		position: absolute;
+		top: 0.25rem;
+		right: 0.25rem;
+		width: 1.5rem;
+		height: 1.5rem;
+		border: none;
+		border-radius: 50%;
+		background: rgba(0, 0, 0, 0.6);
+		color: white;
+		font-size: 1.1rem;
+		line-height: 1;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.2s, background 0.2s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.request-card:hover .remove-icon {
+		opacity: 1;
+	}
+
+	.remove-icon:hover {
+		background: var(--error);
 	}
 
 	.request-card.has-warning:not(.is-added) {
@@ -594,23 +655,6 @@
 
 	.imdb-link:hover {
 		text-decoration: underline;
-	}
-
-	.remove-btn {
-		width: 100%;
-		padding: 0.6rem;
-		border: 1px solid var(--error);
-		border-radius: 0.5rem;
-		background: transparent;
-		color: var(--error);
-		font-size: 0.9rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.remove-btn:hover {
-		background: var(--error);
-		color: white;
 	}
 
 	/* Modal styles */

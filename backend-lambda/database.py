@@ -105,10 +105,10 @@ def get_all_requests(media_type: str | None = None) -> list[dict]:
                 expression_attribute_values={':mt': media_type}
             )
         else:
-            # Scan entire table (filter out rate limit entries)
+            # Scan entire table (filter out non-request entries)
             all_items = client.scan()
-            # Filter out rate limit entries
-            items = [item for item in all_items if not item.get('media_type', '').startswith('RATELIMIT#')]
+            # Filter out rate limit and library entries - only keep 'movie' and 'tv'
+            items = [item for item in all_items if item.get('media_type') in ('movie', 'tv')]
 
         # Sort by created_at descending
         items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
@@ -308,3 +308,93 @@ def clear_rate_limit(ip: str) -> bool:
     except Exception as e:
         print(f"Error clearing rate limit: {e}", flush=True)
         return False
+
+
+# --- Library Functions ---
+
+def sync_library(items: list[dict], media_type: str, clear_first: bool = False) -> int:
+    """
+    Sync library items for a media type.
+    Upserts items (additive by default).
+    Set clear_first=True to delete all existing items before inserting.
+    Returns count of items synced.
+    """
+    try:
+        client = _get_client()
+        library_key = f'LIBRARY#{media_type}'
+
+        # Optionally clear existing library items first
+        if clear_first:
+            existing = client.query(
+                key_condition_expression='media_type = :mt',
+                expression_attribute_values={':mt': library_key}
+            )
+            for item in existing:
+                client.delete_item({
+                    'media_type': library_key,
+                    'tmdb_id': item['tmdb_id']
+                })
+
+        # Insert/update items
+        synced_at = datetime.now(timezone.utc).isoformat()
+        for item in items:
+            lib_item = {
+                'media_type': library_key,
+                'tmdb_id': item['tmdb_id'],
+                'synced_at': synced_at
+            }
+            if item.get('tvdb_id'):
+                lib_item['tvdb_id'] = item['tvdb_id']
+            if item.get('title'):
+                lib_item['title'] = item['title']
+            client.put_item(lib_item)
+
+        return len(items)
+    except Exception as e:
+        print(f"Error syncing library: {e}", flush=True)
+        return 0
+
+
+def is_in_library(tmdb_id: int, media_type: str) -> bool:
+    """Check if an item exists in the Plex library."""
+    try:
+        library_key = f'LIBRARY#{media_type}'
+        item = _get_client().get_item({
+            'media_type': library_key,
+            'tmdb_id': tmdb_id
+        })
+        return item is not None
+    except Exception as e:
+        print(f"Error checking library: {e}", flush=True)
+        return False
+
+
+def get_library_ids(media_type: str | None = None) -> set[tuple[int, str]]:
+    """Get all (tmdb_id, media_type) pairs in library for batch checking."""
+    try:
+        client = _get_client()
+        result = set()
+
+        if media_type:
+            library_key = f'LIBRARY#{media_type}'
+            items = client.query(
+                key_condition_expression='media_type = :mt',
+                expression_attribute_values={':mt': library_key}
+            )
+            for item in items:
+                result.add((item['tmdb_id'], media_type))
+        else:
+            # Scan for both movie and tv library items
+            for mt in ['movie', 'tv']:
+                library_key = f'LIBRARY#{mt}'
+                items = client.query(
+                    key_condition_expression='media_type = :mt',
+                    expression_attribute_values={':mt': library_key}
+                )
+                for item in items:
+                    result.add((item['tmdb_id'], mt))
+
+        return result
+    except Exception as e:
+        print(f"Error getting library ids: {e}", flush=True)
+        return set()
