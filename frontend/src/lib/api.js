@@ -26,6 +26,11 @@ async function getAuthParams() {
 	return authParamsCache;
 }
 
+// Preload auth params to warm up Lambda on page load
+export function preloadAuthParams() {
+	getAuthParams().catch(() => {});
+}
+
 // Derive key using PBKDF2 (brute-force resistant)
 async function pbkdf2DeriveKey(password, salt, iterations) {
 	const encoder = new TextEncoder();

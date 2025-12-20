@@ -1,5 +1,35 @@
 <script>
-	import { authenticated, logout, toasts } from '$lib/stores.js';
+	import { onMount } from 'svelte';
+	import { authenticated, logout, toasts, addToast } from '$lib/stores.js';
+	import { preloadAuthParams, getFeedInfo } from '$lib/api.js';
+
+	let showFeedModal = false;
+	let feedInfo = null;
+	let loadingFeeds = false;
+
+	onMount(() => {
+		// Preload auth params on page load to warm up Lambda
+		preloadAuthParams();
+	});
+
+	async function openFeedModal() {
+		showFeedModal = true;
+		if (!feedInfo) {
+			loadingFeeds = true;
+			try {
+				feedInfo = await getFeedInfo();
+			} catch (error) {
+				console.error('Failed to load feed info:', error);
+			} finally {
+				loadingFeeds = false;
+			}
+		}
+	}
+
+	function copyUrl(url) {
+		navigator.clipboard.writeText(url);
+		addToast('URL copied to clipboard', 'success');
+	}
 </script>
 
 <svelte:head>
@@ -43,7 +73,8 @@
 			{#if $authenticated}
 				<nav>
 					<a href="/">Search</a>
-					<a href="/requests">My Requests</a>
+					<a href="/requests">Requests</a>
+					<button class="nav-btn" on:click={openFeedModal}>Feeds</button>
 					<button class="logout-btn" on:click={logout}>Logout</button>
 				</nav>
 			{/if}
@@ -62,6 +93,80 @@
 			</div>
 		{/each}
 	</div>
+
+	<!-- Feed URLs Modal -->
+	{#if showFeedModal}
+		<div class="modal-overlay" on:click={() => showFeedModal = false}>
+			<div class="modal" on:click|stopPropagation>
+				<div class="modal-header">
+					<h2>Feed URLs for Sonarr/Radarr</h2>
+					<button class="close-btn" on:click={() => showFeedModal = false}>&times;</button>
+				</div>
+				<div class="modal-content">
+					{#if loadingFeeds}
+						<div class="loading">Loading feed info...</div>
+					{:else if feedInfo}
+						{#if feedInfo.token_required}
+							<p class="token-notice">Feed token is required. URLs include the token parameter.</p>
+						{/if}
+
+						<div class="feed-section">
+							<h3>Radarr (Movies)</h3>
+							<div class="feed-item recommended">
+								<div class="feed-info">
+									<strong>{feedInfo.feeds.radarr.name}</strong>
+									<span class="badge">Recommended</span>
+									<p>{feedInfo.feeds.radarr.description}</p>
+									<code>{feedInfo.feeds.radarr.setup}</code>
+								</div>
+								<button on:click={() => copyUrl(feedInfo.feeds.radarr.url)}>Copy URL</button>
+							</div>
+							<div class="feed-item">
+								<div class="feed-info">
+									<strong>{feedInfo.feeds.radarr_rss.name}</strong>
+									<p>{feedInfo.feeds.radarr_rss.description}</p>
+								</div>
+								<button on:click={() => copyUrl(feedInfo.feeds.radarr_rss.url)}>Copy URL</button>
+							</div>
+						</div>
+
+						<div class="feed-section">
+							<h3>Sonarr (TV Shows)</h3>
+							<div class="feed-item recommended">
+								<div class="feed-info">
+									<strong>{feedInfo.feeds.sonarr.name}</strong>
+									<span class="badge">Recommended</span>
+									<p>{feedInfo.feeds.sonarr.description}</p>
+									<code>{feedInfo.feeds.sonarr.setup}</code>
+								</div>
+								<button on:click={() => copyUrl(feedInfo.feeds.sonarr.url)}>Copy URL</button>
+							</div>
+							<div class="feed-item">
+								<div class="feed-info">
+									<strong>{feedInfo.feeds.tv_rss.name}</strong>
+									<p>{feedInfo.feeds.tv_rss.description}</p>
+								</div>
+								<button on:click={() => copyUrl(feedInfo.feeds.tv_rss.url)}>Copy URL</button>
+							</div>
+						</div>
+
+						<div class="feed-section">
+							<h3>Combined</h3>
+							<div class="feed-item">
+								<div class="feed-info">
+									<strong>{feedInfo.feeds.all_rss.name}</strong>
+									<p>{feedInfo.feeds.all_rss.description}</p>
+								</div>
+								<button on:click={() => copyUrl(feedInfo.feeds.all_rss.url)}>Copy URL</button>
+							</div>
+						</div>
+					{:else}
+						<div class="error">Failed to load feed info</div>
+					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -118,6 +223,20 @@
 	}
 
 	nav a:hover {
+		color: var(--text-primary);
+	}
+
+	.nav-btn {
+		background: transparent;
+		border: none;
+		color: var(--text-secondary);
+		cursor: pointer;
+		font-size: inherit;
+		padding: 0;
+		transition: color 0.2s;
+	}
+
+	.nav-btn:hover {
 		color: var(--text-primary);
 	}
 
@@ -196,6 +315,158 @@
 
 		main {
 			padding: 1rem;
+		}
+	}
+
+	/* Modal styles */
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.8);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+		padding: 1rem;
+	}
+
+	.modal {
+		background: var(--bg-secondary);
+		border-radius: 1rem;
+		max-width: 600px;
+		width: 100%;
+		max-height: 90vh;
+		overflow-y: auto;
+	}
+
+	.modal-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 1.5rem;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.modal-header h2 {
+		margin: 0;
+		font-size: 1.25rem;
+	}
+
+	.close-btn {
+		background: none;
+		border: none;
+		font-size: 1.5rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+
+	.close-btn:hover {
+		color: var(--text-primary);
+	}
+
+	.modal-content {
+		padding: 1.5rem;
+	}
+
+	.loading, .error {
+		text-align: center;
+		color: var(--text-secondary);
+		padding: 2rem;
+	}
+
+	.token-notice {
+		background: var(--bg-tertiary);
+		padding: 0.75rem 1rem;
+		border-radius: 0.5rem;
+		margin-bottom: 1.5rem;
+		color: var(--warning);
+		font-size: 0.9rem;
+	}
+
+	.feed-section {
+		margin-bottom: 1.5rem;
+	}
+
+	.feed-section h3 {
+		font-size: 1rem;
+		margin-bottom: 0.75rem;
+		color: var(--text-secondary);
+	}
+
+	.feed-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		padding: 1rem;
+		background: var(--bg-tertiary);
+		border-radius: 0.5rem;
+		margin-bottom: 0.5rem;
+		gap: 1rem;
+	}
+
+	.feed-item.recommended {
+		border: 1px solid var(--accent);
+	}
+
+	.feed-info {
+		flex: 1;
+	}
+
+	.feed-info strong {
+		display: block;
+		margin-bottom: 0.25rem;
+	}
+
+	.feed-info p {
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		margin: 0.25rem 0;
+	}
+
+	.feed-info code {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		background: var(--bg-secondary);
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+	}
+
+	.badge {
+		display: inline-block;
+		background: var(--accent);
+		color: white;
+		font-size: 0.7rem;
+		padding: 0.2rem 0.5rem;
+		border-radius: 0.25rem;
+		margin-left: 0.5rem;
+		vertical-align: middle;
+	}
+
+	.feed-item button {
+		padding: 0.5rem 1rem;
+		background: var(--accent);
+		border: none;
+		border-radius: 0.5rem;
+		color: white;
+		font-size: 0.85rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.feed-item button:hover {
+		background: var(--accent-hover);
+	}
+
+	@media (max-width: 768px) {
+		.feed-item {
+			flex-direction: column;
+		}
+
+		.feed-item button {
+			width: 100%;
 		}
 	}
 </style>

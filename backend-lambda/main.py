@@ -687,24 +687,48 @@ def plex_webhook(
     try:
         data = json.loads(payload)
     except json.JSONDecodeError:
+        print("WEBHOOK: Invalid JSON payload received", flush=True)
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    # Check event type - only process library.new
+    # Extract key info for logging
     event = data.get('event', '')
+    server_title = data.get('Server', {}).get('title', 'unknown')
+    metadata = data.get('Metadata', {})
+    media_title = metadata.get('title', metadata.get('grandparentTitle', 'unknown'))
+    media_type_raw = metadata.get('type', 'unknown')
+
+    print(f"WEBHOOK: Received event='{event}' server='{server_title}' type='{media_type_raw}' title='{media_title}'", flush=True)
+
+    # Check event type - only process library.new
     if event != 'library.new':
+        print(f"WEBHOOK: Ignored - event type '{event}' not processed", flush=True)
         return {"status": "ignored", "reason": f"Event type '{event}' not processed"}
 
     # Validate server name if configured
     if settings.plex_server_name:
-        server_title = data.get('Server', {}).get('title', '')
         if server_title != settings.plex_server_name:
+            print(f"WEBHOOK: Ignored - server mismatch (expected='{settings.plex_server_name}', got='{server_title}')", flush=True)
             return {"status": "ignored", "reason": "Server name mismatch"}
 
     # Parse the payload
     media = plex.parse_plex_payload(data)
 
     if not media:
+        print(f"WEBHOOK: Ignored - unsupported media type '{media_type_raw}'", flush=True)
         return {"status": "ignored", "reason": "Unsupported media type"}
+
+    print(f"WEBHOOK: Parsed media - title='{media.title}' type='{media.media_type}' tmdb={media.tmdb_id} tvdb={media.tvdb_id}", flush=True)
+
+    # Add to library if we have a TMDB ID
+    added_to_library = False
+    if media.tmdb_id:
+        db.sync_library(
+            [{"tmdb_id": media.tmdb_id, "tvdb_id": media.tvdb_id, "title": media.title}],
+            media.media_type,
+            clear_first=False
+        )
+        added_to_library = True
+        print(f"WEBHOOK: Added to library - tmdb={media.tmdb_id} type='{media.media_type}'", flush=True)
 
     # Try to match and update request using our matching strategy
     matched = False
@@ -714,6 +738,7 @@ def plex_webhook(
     if media.tmdb_id:
         matched = db.mark_as_added(media.tmdb_id, media.media_type)
         if matched:
+            print(f"WEBHOOK: Matched request by TMDB ID {media.tmdb_id}", flush=True)
             # If we matched and have a plex_guid, cache it for future
             if media.plex_guid:
                 db.update_plex_guid(media.tmdb_id, media.media_type, media.plex_guid)
@@ -723,19 +748,24 @@ def plex_webhook(
         matched_request = db.find_by_tvdb_id(media.tvdb_id, media.media_type)
         if matched_request:
             matched = db.mark_as_added(matched_request['tmdb_id'], media.media_type)
-            if matched and media.plex_guid:
-                db.update_plex_guid(matched_request['tmdb_id'], media.media_type, media.plex_guid)
+            if matched:
+                print(f"WEBHOOK: Matched request by TVDB ID {media.tvdb_id} -> TMDB {matched_request['tmdb_id']}", flush=True)
+                if media.plex_guid:
+                    db.update_plex_guid(matched_request['tmdb_id'], media.media_type, media.plex_guid)
 
     # 3. Try Plex GUID (for episodes/seasons using cached show GUID)
     if not matched and media.plex_guid:
         matched_request = db.find_by_plex_guid(media.plex_guid)
         if matched_request:
             matched = db.mark_as_added(matched_request['tmdb_id'], matched_request['media_type'])
+            if matched:
+                print(f"WEBHOOK: Matched request by Plex GUID -> TMDB {matched_request['tmdb_id']}", flush=True)
 
     # 4. Try TVDB reverse lookup (episode TVDB ID → show TVDB ID)
     if not matched and media.episode_tvdb_id:
         import asyncio
         tvdb = get_tvdb_module()
+        print(f"WEBHOOK: Attempting TVDB reverse lookup for episode {media.episode_tvdb_id}", flush=True)
         show_tvdb_id = asyncio.get_event_loop().run_until_complete(
             tvdb.get_series_id_from_episode(media.episode_tvdb_id)
         )
@@ -743,25 +773,22 @@ def plex_webhook(
             matched_request = db.find_by_tvdb_id(show_tvdb_id, 'tv')
             if matched_request:
                 matched = db.mark_as_added(matched_request['tmdb_id'], 'tv')
-                if matched and media.plex_guid:
-                    db.update_plex_guid(matched_request['tmdb_id'], 'tv', media.plex_guid)
+                if matched:
+                    print(f"WEBHOOK: Matched request by TVDB reverse lookup - episode {media.episode_tvdb_id} -> show {show_tvdb_id} -> TMDB {matched_request['tmdb_id']}", flush=True)
+                    if media.plex_guid:
+                        db.update_plex_guid(matched_request['tmdb_id'], 'tv', media.plex_guid)
 
-    if matched:
-        return {
-            "status": "success",
-            "matched": True,
-            "title": media.title,
-            "media_type": media.media_type,
-            "tmdb_id": media.tmdb_id or (matched_request['tmdb_id'] if matched_request else None)
-        }
-    else:
-        return {
-            "status": "success",
-            "matched": False,
-            "reason": "No matching request found",
-            "title": media.title,
-            "media_type": media.media_type
-        }
+    result = {
+        "status": "success",
+        "title": media.title,
+        "media_type": media.media_type,
+        "tmdb_id": media.tmdb_id,
+        "added_to_library": added_to_library,
+        "matched_request": matched
+    }
+    print(f"WEBHOOK: Complete - {result}", flush=True)
+
+    return result
 
 
 # --- Library Sync ---
@@ -794,10 +821,14 @@ async def sync_library_endpoint(
     try:
         data = await request.json()
     except json.JSONDecodeError:
+        print(f"SYNC: Invalid JSON body for media_type='{media_type}'", flush=True)
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     if not isinstance(data, list):
+        print(f"SYNC: Body is not a list for media_type='{media_type}'", flush=True)
         raise HTTPException(status_code=400, detail="Body must be a JSON array")
+
+    print(f"SYNC: Starting sync for media_type='{media_type}' count={len(data)} clear={clear}", flush=True)
 
     # Sync the library
     count = db.sync_library(data, media_type, clear_first=clear)
@@ -810,12 +841,15 @@ async def sync_library_endpoint(
             if db.mark_as_added(tmdb_id, media_type):
                 marked += 1
 
-    return {
+    result = {
         "status": "success",
         "synced": count,
         "marked_as_added": marked,
         "media_type": media_type
     }
+    print(f"SYNC: Complete - {result}", flush=True)
+
+    return result
 
 
 print("DEBUG: Module load complete, handler ready", flush=True)

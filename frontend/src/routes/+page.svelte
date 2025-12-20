@@ -499,7 +499,8 @@
 	}
 
 	.request-btn.requested {
-		background: var(--success);
+		background: var(--bg-tertiary);
+		color: var(--text-secondary);
 		cursor: default;
 	}
 

@@ -533,6 +533,16 @@ async def plex_webhook(
     if not media:
         return {"status": "ignored", "reason": "Unsupported media type"}
 
+    # Add to library if we have a TMDB ID
+    added_to_library = False
+    if media.tmdb_id:
+        await sync_library(
+            [{"tmdb_id": media.tmdb_id, "tvdb_id": media.tvdb_id, "title": media.title}],
+            media.media_type,
+            clear_first=False
+        )
+        added_to_library = True
+
     # Try to match and update request using our matching strategy
     matched = False
     matched_request = None
@@ -570,22 +580,14 @@ async def plex_webhook(
                 if matched and media.plex_guid:
                     await update_plex_guid(matched_request['tmdb_id'], 'tv', media.plex_guid)
 
-    if matched:
-        return {
-            "status": "success",
-            "matched": True,
-            "title": media.title,
-            "media_type": media.media_type,
-            "tmdb_id": media.tmdb_id or (matched_request['tmdb_id'] if matched_request else None)
-        }
-    else:
-        return {
-            "status": "success",
-            "matched": False,
-            "reason": "No matching request found",
-            "title": media.title,
-            "media_type": media.media_type
-        }
+    return {
+        "status": "success",
+        "title": media.title,
+        "media_type": media.media_type,
+        "tmdb_id": media.tmdb_id,
+        "added_to_library": added_to_library,
+        "matched_request": matched
+    }
 
 
 # --- Library Sync ---
