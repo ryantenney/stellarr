@@ -38,3 +38,10 @@ certs/
 # Logs
 logs/
 *.log
+
+# frontend build
+/frontend/build
+
+# Terraform
+terraform/.terraform
+terraform/.terraform.lock.hcl

@@ -8,6 +8,9 @@
 	let feedInfo = null;
 	let mediaFilter = 'all';
 	let showFeedModal = false;
+	let showConfirmModal = false;
+	let itemToRemove = null;
+	let removing = false;
 
 	onMount(async () => {
 		if (!$authenticated) {
@@ -38,20 +41,32 @@
 		}
 	}
 
-	async function handleRemove(item) {
-		if (!confirm(`Remove "${item.title}" from requests?`)) return;
+	function handleRemove(item) {
+		itemToRemove = item;
+		showConfirmModal = true;
+	}
 
+	function cancelRemove() {
+		showConfirmModal = false;
+		itemToRemove = null;
+	}
+
+	async function confirmRemove() {
+		if (!itemToRemove || removing) return;
+
+		removing = true;
 		try {
-			await removeRequest(item.tmdb_id, item.media_type);
-			const tmdbId = Number(item.tmdb_id);
-			const mediaType = item.media_type;
-			console.log('Removing:', { tmdbId, mediaType });
-			console.log('Before filter:', requests.map(r => ({ tmdb_id: r.tmdb_id, media_type: r.media_type })));
+			await removeRequest(itemToRemove.tmdb_id, itemToRemove.media_type);
+			const tmdbId = Number(itemToRemove.tmdb_id);
+			const mediaType = itemToRemove.media_type;
 			requests = requests.filter(r => !(Number(r.tmdb_id) === tmdbId && r.media_type === mediaType));
-			console.log('After filter:', requests.map(r => ({ tmdb_id: r.tmdb_id, media_type: r.media_type })));
-			addToast(`Removed "${item.title}"`, 'success');
+			addToast(`Removed "${itemToRemove.title}"`, 'success');
+			showConfirmModal = false;
+			itemToRemove = null;
 		} catch (error) {
 			addToast('Failed to remove request', 'error');
+		} finally {
+			removing = false;
 		}
 	}
 
@@ -180,6 +195,27 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Confirm Remove Modal -->
+	{#if showConfirmModal && itemToRemove}
+		<div class="modal-overlay" on:click={cancelRemove}>
+			<div class="modal confirm-modal" on:click|stopPropagation>
+				<div class="confirm-content">
+					<img src={getPosterUrl(itemToRemove.poster_path)} alt={itemToRemove.title} class="confirm-poster" />
+					<div class="confirm-text">
+						<h2>Remove Request?</h2>
+						<p>Are you sure you want to remove <strong>{itemToRemove.title}</strong> from your requests?</p>
+					</div>
+				</div>
+				<div class="confirm-actions">
+					<button class="cancel-btn" on:click={cancelRemove} disabled={removing}>Cancel</button>
+					<button class="confirm-btn" on:click={confirmRemove} disabled={removing}>
+						{removing ? 'Removing...' : 'Remove'}
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Feed URLs Modal -->
 	{#if showFeedModal && feedInfo}
@@ -595,6 +631,81 @@
 
 	.feed-item button:hover {
 		background: var(--accent-hover);
+	}
+
+	/* Confirm Modal */
+	.confirm-modal {
+		max-width: 400px;
+		padding: 1.5rem;
+	}
+
+	.confirm-content {
+		display: flex;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.confirm-poster {
+		width: 80px;
+		height: 120px;
+		object-fit: cover;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+	}
+
+	.confirm-text h2 {
+		margin: 0 0 0.5rem 0;
+		font-size: 1.25rem;
+	}
+
+	.confirm-text p {
+		margin: 0;
+		color: var(--text-secondary);
+		font-size: 0.95rem;
+		line-height: 1.5;
+	}
+
+	.confirm-actions {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: flex-end;
+	}
+
+	.cancel-btn {
+		padding: 0.75rem 1.5rem;
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		background: transparent;
+		color: var(--text-secondary);
+		font-size: 0.95rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.cancel-btn:hover:not(:disabled) {
+		border-color: var(--text-primary);
+		color: var(--text-primary);
+	}
+
+	.confirm-btn {
+		padding: 0.75rem 1.5rem;
+		border: none;
+		border-radius: 0.5rem;
+		background: var(--error);
+		color: white;
+		font-size: 0.95rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.confirm-btn:hover:not(:disabled) {
+		background: #dc2626;
+	}
+
+	.confirm-btn:disabled,
+	.cancel-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	@media (max-width: 768px) {
