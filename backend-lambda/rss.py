@@ -28,7 +28,9 @@ def _get_pub_date(created_at) -> datetime:
 
 def generate_movie_rss(base_url: str) -> str:
     """Generate RSS feed for movie requests (Radarr compatible)."""
-    requests = get_all_requests(media_type="movie")
+    all_requests = get_all_requests(media_type="movie")
+    # Filter out items already added to library
+    requests = [r for r in all_requests if not r.get('added_at')]
 
     fg = create_feed_generator(
         title="Overseer Lite - Movie Requests",
@@ -56,7 +58,9 @@ def generate_movie_rss(base_url: str) -> str:
 
 def generate_tv_rss(base_url: str) -> str:
     """Generate RSS feed for TV show requests."""
-    requests = get_all_requests(media_type="tv")
+    all_requests = get_all_requests(media_type="tv")
+    # Filter out items already added to library
+    requests = [r for r in all_requests if not r.get('added_at')]
 
     fg = create_feed_generator(
         title="Overseer Lite - TV Show Requests",
@@ -84,7 +88,9 @@ def generate_tv_rss(base_url: str) -> str:
 
 def generate_combined_rss(base_url: str) -> str:
     """Generate combined RSS feed for all requests."""
-    requests = get_all_requests()
+    all_requests = get_all_requests()
+    # Filter out items already added to library
+    requests = [r for r in all_requests if not r.get('added_at')]
 
     fg = create_feed_generator(
         title="Overseer Lite - All Requests",
@@ -116,7 +122,9 @@ def generate_combined_rss(base_url: str) -> str:
 
 def generate_radarr_json() -> list[dict]:
     """Generate Radarr StevenLu Custom list format (JSON)."""
-    requests = get_all_requests(media_type="movie")
+    all_requests = get_all_requests(media_type="movie")
+    # Filter out items already added to library
+    requests = [r for r in all_requests if not r.get('added_at')]
 
     items = []
     for req in requests:
@@ -134,7 +142,9 @@ def generate_radarr_json() -> list[dict]:
 
 def generate_sonarr_json() -> list[dict]:
     """Generate Sonarr Custom List format (JSON)."""
-    requests = get_all_requests(media_type="tv")
+    all_requests = get_all_requests(media_type="tv")
+    # Filter out items already added to library
+    requests = [r for r in all_requests if not r.get('added_at')]
 
     items = []
     for req in requests:

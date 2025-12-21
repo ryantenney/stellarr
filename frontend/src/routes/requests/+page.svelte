@@ -33,7 +33,7 @@
 	$: filteredByStatus = statusFilter === 'all'
 		? requests
 		: statusFilter === 'added'
-			? requests.filter(r => r.added_at)
+			? requests.filter(r => r.added_at).sort((a, b) => new Date(b.added_at) - new Date(a.added_at))
 			: requests.filter(r => !r.added_at);
 
 	// Computed: pagination
