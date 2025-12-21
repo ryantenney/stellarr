@@ -28,6 +28,14 @@ cd backend-lambda
 ./deploy.sh {lambda_function_name} {deployment_bucket}  # ARM64 build + deploy
 ```
 
+### Unified Deployment
+```bash
+./deploy.sh              # Deploy everything (terraform, backend, frontend, invalidate)
+./deploy.sh --skip-tf    # Skip terraform
+./deploy.sh --backend    # Backend only
+./deploy.sh --frontend   # Frontend + cache invalidation
+```
+
 ### Terraform (AWS Infrastructure)
 ```bash
 cd terraform
@@ -50,33 +58,45 @@ Both backends expose the same FastAPI endpoints. Changes to API structure must b
 **Frontend** is a static SPA (SvelteKit with static adapter) - no Node.js server needed in production.
 
 ### Key Endpoints
+- `/api/auth/params` - Returns PBKDF2 iterations for client-side key derivation
 - `/api/auth/verify` - Password authentication, returns HMAC-SHA256 signed token
 - `/api/search` - TMDB search with media type filter
+- `/api/trending` - Trending media (cached 1hr via CloudFront)
 - `/api/request`, `/api/requests` - Add/list/remove requests
+- `/api/feeds` - Get feed URLs for UI
 - `/list/radarr`, `/list/sonarr` - JSON feeds for import lists
 - `/rss/movies`, `/rss/tv`, `/rss/all` - RSS feeds
+- `/webhook/plex?token=XXX` - Plex webhook (marks requests added, updates library)
+- `/sync/library?media_type=X&token=XXX` - Bulk library sync
 
 ### Authentication
-- Preshared password → HMAC-SHA256 signed token (30-day expiry, hardcoded)
+- Preshared password → PBKDF2 key derivation (client-side) → HMAC-SHA256 signed token (30-day expiry)
 - Token sent via Authorization: Bearer header
-- Feed endpoints are public (optional FEED_TOKEN query param protection)
+- Feed endpoints protected by optional FEED_TOKEN query param
+- Webhook/sync endpoints protected by PLEX_WEBHOOK_TOKEN query param
 
 ## Key Files
 
-**Backend:** `main.py` (FastAPI app), `database.py` (CRUD), `tmdb.py` (API client), `rss.py` (feed generation), `config.py` (Pydantic settings)
+**Backend:** `main.py` (FastAPI app), `database.py` (CRUD), `tmdb.py` (API client), `rss.py` (feed generation), `plex.py` (webhook parsing), `tvdb.py` (episode→show lookup), `config.py` (Pydantic settings)
 
 **Lambda-specific:** `dynamodb_lite.py` + `aws_sigv4.py` (lightweight DynamoDB without boto3 for cold start optimization)
 
-**Frontend:** `src/routes/+page.svelte` (search/home), `src/routes/requests/+page.svelte` (request list), `src/lib/api.js` (HTTP client), `src/lib/stores.js` (auth state)
+**Frontend:** `src/routes/+page.svelte` (search/home), `src/routes/requests/+page.svelte` (request list), `src/routes/+layout.svelte` (nav, feeds modal, PWA setup), `src/lib/api.js` (HTTP client), `src/lib/stores.js` (auth state)
+
+**Scripts:** `scripts/plex-sync.py` (bulk library sync)
 
 ## Environment Variables
 
 Required: `APP_SECRET_KEY`, `PRESHARED_PASSWORD`, `TMDB_API_KEY`
-Optional: `FEED_TOKEN` (protects feed endpoints), `DATABASE_PATH`
+Optional: `FEED_TOKEN` (protects feed endpoints), `PLEX_WEBHOOK_TOKEN` (protects webhook/sync), `PLEX_SERVER_NAME` (filter webhooks), `TVDB_API_KEY` (episode→show resolution), `DATABASE_PATH`
 
 ## Important Patterns
 
-- All database operations are async
+- All database operations are async (SQLite) or sync (DynamoDB in Lambda)
 - Items can exist in requests without IMDB/TVDB IDs but won't appear in respective feeds (UI shows warnings)
 - Lambda uses lazy imports and bytecode precompilation for cold start optimization
-- Vite dev server proxies `/api` and `/rss` to `localhost:8000` for local development
+- Vite dev server proxies `/api`, `/rss`, `/list`, `/webhook`, `/sync` to `localhost:8000`
+- `/api/trending` is cached by CloudFront (1hr); frontend hydrates with current request status client-side
+- Library table tracks items in Plex; populated via webhook (incremental) or sync endpoint (bulk)
+- Plex webhook logs use `WEBHOOK:` prefix; sync logs use `SYNC:` prefix (for CloudWatch filtering)
+- Frontend is a PWA with iOS/Android home screen support

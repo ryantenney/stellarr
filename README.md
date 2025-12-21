@@ -4,12 +4,16 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 
 ## Features
 
-- **Simple Authentication**: Preshared password protection with signed session tokens
+- **Simple Authentication**: Preshared password with PBKDF2 key derivation and signed session tokens
 - **TMDB Integration**: Search movies and TV shows using The Movie Database
 - **Sonarr/Radarr Import Lists**: Native JSON formats for direct import
+- **Plex Webhook Integration**: Auto-mark requests as added when Plex downloads media
+- **Library Sync**: Batch sync Plex library to show "In Library" badges
 - **Feed Token Protection**: Optional token-based auth for feed endpoints
 - **Missing ID Warnings**: UI indicators when external IDs (IMDB/TVDB) are missing
-- **Modern UI**: Svelte-based responsive frontend
+- **Large Series Warnings**: Visual indicator for TV shows with 7+ seasons
+- **PWA Support**: Install as app on iOS/Android with proper icons
+- **Modern UI**: Svelte-based responsive frontend with mobile optimizations
 - **Multiple Deployment Options**:
   - Docker Compose with Caddy (auto HTTPS)
   - AWS Serverless (Lambda + DynamoDB + CloudFront)
@@ -170,9 +174,10 @@ Items missing these IDs will show a warning indicator and won't appear in the re
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/auth/params` | GET | Get PBKDF2 iterations for login |
 | `/api/auth/verify` | POST | Verify password, returns session token |
 | `/api/search` | POST | Search TMDB |
-| `/api/trending` | GET | Get trending media |
+| `/api/trending` | GET | Get trending media (cached 1hr via CloudFront) |
 | `/api/request` | POST | Add a request |
 | `/api/request/{type}/{id}` | DELETE | Remove a request |
 | `/api/requests` | GET | List all requests |
@@ -188,6 +193,41 @@ Items missing these IDs will show a warning indicator and won't appear in the re
 | `/rss/movies` | RSS | Radarr RSS List |
 | `/rss/tv` | RSS | Generic TV RSS |
 | `/rss/all` | RSS | Combined RSS |
+
+### Webhook & Sync Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/webhook/plex?token=XXX` | POST | Plex webhook - marks requests as added |
+| `/sync/library?media_type=movie&token=XXX` | POST | Bulk sync library items |
+
+## Plex Integration
+
+### Webhook Setup
+
+Configure Plex to send webhooks when new media is added:
+
+1. In Plex: Settings → Webhooks → Add Webhook
+2. URL: `https://your-domain.com/webhook/plex?token=YOUR_PLEX_WEBHOOK_TOKEN`
+3. Overseer will auto-mark matching requests as "Added"
+
+The webhook also adds items to the library table, enabling "In Library" badges on search results.
+
+### Library Sync Script
+
+For initial library population, use the sync script on your Plex server:
+
+```bash
+cd scripts
+pip install -r requirements.txt
+python plex-sync.py \
+  --plex-url http://localhost:32400 \
+  --plex-token YOUR_PLEX_TOKEN \
+  --overseer-url https://your-domain.com \
+  --sync-token YOUR_PLEX_WEBHOOK_TOKEN
+```
+
+This syncs all movies and TV shows from Plex, enabling "In Library" badges even for items added before the webhook was configured.
 
 ## Project Structure
 
@@ -217,6 +257,9 @@ overseer-lite/
 | `PRESHARED_PASSWORD` | User access password | Yes |
 | `TMDB_API_KEY` | TMDB API key | Yes |
 | `FEED_TOKEN` | Token for feed endpoint auth | No |
+| `PLEX_WEBHOOK_TOKEN` | Token for Plex webhook/sync endpoints | No |
+| `PLEX_SERVER_NAME` | Filter webhooks to specific Plex server | No |
+| `TVDB_API_KEY` | TVDB API key (for episode→show resolution) | No |
 | `DOMAIN` | Your domain (for HTTPS) | Production |
 
 ## Security
