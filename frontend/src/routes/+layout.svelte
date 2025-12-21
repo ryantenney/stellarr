@@ -54,11 +54,47 @@
 			padding: 0;
 		}
 
+		html {
+			overscroll-behavior: none;
+		}
+
 		body {
 			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 			background-color: var(--bg-primary);
 			color: var(--text-primary);
 			min-height: 100vh;
+			overscroll-behavior: none;
+			/* Disable text selection on UI elements */
+			-webkit-user-select: none;
+			user-select: none;
+			/* Disable tap highlight on mobile */
+			-webkit-tap-highlight-color: transparent;
+			/* Smooth scrolling */
+			-webkit-overflow-scrolling: touch;
+			/* Prevent pull-to-refresh */
+			overflow-y: auto;
+		}
+
+		/* Allow text selection in content areas */
+		p, h1, h2, h3, h4, h5, h6, .selectable {
+			-webkit-user-select: text;
+			user-select: text;
+		}
+
+		/* Disable callout on long-press (iOS) */
+		a, button, img {
+			-webkit-touch-callout: none;
+		}
+
+		/* Prevent image dragging */
+		img {
+			-webkit-user-drag: none;
+			user-drag: none;
+		}
+
+		/* Fix for iOS input zoom - ensure inputs are 16px+ */
+		input, textarea, select {
+			font-size: 16px;
 		}
 	</style>
 </svelte:head>
@@ -74,8 +110,11 @@
 				<nav>
 					<a href="/">Search</a>
 					<a href="/requests">Requests</a>
-					<button class="nav-btn" on:click={openFeedModal}>Feeds</button>
-					<button class="logout-btn" on:click={logout}>Logout</button>
+					<button class="nav-btn desktop-only" on:click={openFeedModal}>Feeds</button>
+					<button class="logout-btn" on:click={logout} title="Logout">
+						<span class="logout-text">Logout</span>
+						<span class="logout-icon">⏻</span>
+					</button>
 				</nav>
 			{/if}
 		</div>
@@ -255,6 +294,10 @@
 		color: var(--error);
 	}
 
+	.logout-icon {
+		display: none;
+	}
+
 	main {
 		flex: 1;
 		max-width: 1400px;
@@ -304,13 +347,36 @@
 		}
 	}
 
+	.desktop-only {
+		display: inline;
+	}
+
 	@media (max-width: 768px) {
 		header {
-			padding: 1rem;
+			padding: 0.75rem 1rem;
 		}
 
 		nav {
-			gap: 1rem;
+			gap: 0.75rem;
+		}
+
+		.desktop-only {
+			display: none;
+		}
+
+		.logout-btn {
+			padding: 0.4rem 0.5rem;
+			border: none;
+			background: none;
+		}
+
+		.logout-text {
+			display: none;
+		}
+
+		.logout-icon {
+			display: inline;
+			font-size: 1.1rem;
 		}
 
 		main {

@@ -1,7 +1,10 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { authenticated, loading, addToast, setAuthenticated } from '$lib/stores.js';
-	import { verifyPassword, search, getTrending, addRequest } from '$lib/api.js';
+	import { verifyPassword, search, getTrending, addRequest, getRequests } from '$lib/api.js';
+
+	// Cache of requested items to hydrate cached trending results
+	let requestedItems = new Set();
 
 	let password = '';
 	let userName = '';
@@ -9,7 +12,7 @@
 	let searchResults = [];
 	let trendingResults = [];
 	let mediaFilter = 'all';
-	let searchTimeout;
+	let searchTimeout = null;
 
 	// Pagination - dynamic based on grid columns
 	let currentPage = 1;
@@ -35,9 +38,30 @@
 
 	onMount(async () => {
 		if ($authenticated) {
+			// Load requests first to hydrate cached trending data
+			await loadRequestedItems();
 			await loadTrending();
 		}
 	});
+
+	async function loadRequestedItems() {
+		try {
+			const data = await getRequests();
+			requestedItems = new Set(
+				data.requests.map(r => `${r.media_type}:${r.tmdb_id}`)
+			);
+		} catch (error) {
+			console.error('Failed to load requests:', error);
+		}
+	}
+
+	function hydrateResults(results) {
+		// Merge current request status into results (for cached data)
+		return results.map(item => ({
+			...item,
+			requested: item.requested || requestedItems.has(`${item.media_type}:${item.id}`)
+		}));
+	}
 
 	// Set up resize observer when grid container becomes available
 	$: if (gridContainer && !resizeObserver) {
@@ -51,6 +75,9 @@
 	onDestroy(() => {
 		if (resizeObserver) {
 			resizeObserver.disconnect();
+		}
+		if (searchTimeout) {
+			clearTimeout(searchTimeout);
 		}
 	});
 
@@ -75,7 +102,7 @@
 	async function loadTrending() {
 		try {
 			const data = await getTrending(mediaFilter === 'all' ? 'all' : mediaFilter);
-			trendingResults = data.results;
+			trendingResults = hydrateResults(data.results);
 		} catch (error) {
 			console.error('Failed to load trending:', error);
 		}
@@ -91,7 +118,7 @@
 			$loading = true;
 			const filterType = mediaFilter === 'all' ? null : mediaFilter;
 			const data = await search(searchQuery, filterType);
-			searchResults = data.results;
+			searchResults = hydrateResults(data.results);
 		} catch (error) {
 			addToast('Search failed', 'error');
 		} finally {
@@ -100,13 +127,20 @@
 	}
 
 	function debounceSearch() {
-		clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(handleSearch, 300);
+		if (searchTimeout) {
+			clearTimeout(searchTimeout);
+		}
+		searchTimeout = setTimeout(() => {
+			searchTimeout = null;
+			handleSearch();
+		}, 500);
 	}
 
 	async function handleRequest(item) {
 		try {
 			await addRequest(item.id, item.media_type);
+			// Update local cache for future hydration
+			requestedItems.add(`${item.media_type}:${item.id}`);
 			item.requested = true;
 			searchResults = [...searchResults];
 			trendingResults = [...trendingResults];
@@ -117,8 +151,13 @@
 	}
 
 	function getPosterUrl(path) {
-		if (!path) return 'https://via.placeholder.com/200x300?text=No+Image';
+		if (!path) return null;
 		return `https://image.tmdb.org/t/p/w200${path}`;
+	}
+
+	function handlePosterError(event) {
+		// Hide broken image, show placeholder
+		event.target.style.display = 'none';
 	}
 
 	$: displayResults = searchQuery.trim() ? searchResults : trendingResults;
@@ -196,7 +235,16 @@
 				{#each paginatedResults as item (item.id + item.media_type)}
 					<div class="media-card">
 						<div class="poster">
-							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
+							<div class="poster-placeholder">
+								<span class="placeholder-icon">🎬</span>
+							</div>
+							{#if getPosterUrl(item.poster_path)}
+								<img
+									src={getPosterUrl(item.poster_path)}
+									alt={item.title}
+									on:error={handlePosterError}
+								/>
+							{/if}
 							<div class="media-type-badge">{item.media_type === 'tv' ? 'TV' : 'Movie'}</div>
 							{#if item.vote_average}
 								<div class="rating-badge">{item.vote_average.toFixed(1)}</div>
@@ -400,7 +448,23 @@
 		aspect-ratio: 2/3;
 	}
 
+	.poster-placeholder {
+		position: absolute;
+		inset: 0;
+		background: var(--bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.placeholder-icon {
+		font-size: 3rem;
+		opacity: 0.4;
+	}
+
 	.poster img {
+		position: absolute;
+		inset: 0;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;

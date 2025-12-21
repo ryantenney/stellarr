@@ -2,8 +2,22 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+
+		<!-- Favicon -->
+		<link rel="icon" type="image/x-icon" href="%sveltekit.assets%/favicon.ico" />
+		<link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/favicon.png" />
+
+		<!-- iOS PWA -->
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="Overseer" />
+
+		<!-- Android PWA -->
+		<link rel="manifest" href="%sveltekit.assets%/manifest.json" />
+		<meta name="theme-color" content="#0f0f0f" />
+
 		<title>Overseer Lite</title>
 		%sveltekit.head%
 	</head>
