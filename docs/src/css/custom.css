@@ -1,0 +1,48 @@
+/**
+ * Custom CSS for Overseer Lite documentation
+ * Colors match the main application theme
+ */
+
+:root {
+  /* Purple accent from app */
+  --ifm-color-primary: #7b2cbf;
+  --ifm-color-primary-dark: #6f27ac;
+  --ifm-color-primary-darker: #6925a2;
+  --ifm-color-primary-darkest: #561f86;
+  --ifm-color-primary-light: #8731d2;
+  --ifm-color-primary-lighter: #8d37d8;
+  --ifm-color-primary-lightest: #9d4edd;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #9d4edd;
+  --ifm-color-primary-dark: #8b3dcc;
+  --ifm-color-primary-darker: #8237c2;
+  --ifm-color-primary-darkest: #6b2da0;
+  --ifm-color-primary-light: #ab60e4;
+  --ifm-color-primary-lighter: #b26de7;
+  --ifm-color-primary-lightest: #c48eee;
+
+  /* Match app dark theme */
+  --ifm-background-color: #0f0f0f;
+  --ifm-background-surface-color: #1a1a1a;
+  --ifm-navbar-background-color: #1a1a1a;
+  --ifm-footer-background-color: #1a1a1a;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Code blocks */
+[data-theme='dark'] .prism-code {
+  background-color: #1a1a1a;
+}
+
+/* Tables */
+[data-theme='dark'] table {
+  background-color: #1a1a1a;
+}
+
+[data-theme='dark'] table tr:nth-child(2n) {
+  background-color: #252525;
+}
