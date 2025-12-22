@@ -13,7 +13,7 @@ from config import get_settings
 from database import (
     init_db, add_request, remove_request, get_all_requests, is_requested,
     mark_as_added, find_by_tvdb_id, find_by_plex_guid, update_plex_guid,
-    sync_library, is_in_library
+    sync_library, is_in_library, get_plex_guid_cache, set_plex_guid_cache
 )
 import json
 from tmdb import tmdb_client
@@ -533,11 +533,30 @@ async def plex_webhook(
     if not media:
         return {"status": "ignored", "reason": "Unsupported media type"}
 
-    # Add to library if we have a TMDB ID
+    # For episodes/seasons, the tmdb_id from the Guid array is episode/season-level, not show-level.
+    # We need to resolve show-level IDs before adding to library or matching.
+    show_tmdb_id = media.tmdb_id
+    show_tvdb_id = media.tvdb_id
+    resolved_from_cache = False
+
+    # For episodes/seasons, check the Plex GUID cache first
+    if media.plex_type in ('episode', 'season') and media.plex_guid:
+        cached = await get_plex_guid_cache(media.plex_guid)
+        if cached:
+            show_tmdb_id = cached.get('tmdb_id')
+            show_tvdb_id = cached.get('tvdb_id')
+            resolved_from_cache = True
+        else:
+            # For episodes/seasons, the IDs in Guid array are NOT show-level
+            # Clear them so we don't incorrectly add episode IDs to library
+            show_tmdb_id = None
+            show_tvdb_id = None
+
+    # Add to library only if we have a show-level TMDB ID (not episode-level)
     added_to_library = False
-    if media.tmdb_id:
+    if show_tmdb_id:
         await sync_library(
-            [{"tmdb_id": media.tmdb_id, "tvdb_id": media.tvdb_id, "title": media.title}],
+            [{"tmdb_id": show_tmdb_id, "tvdb_id": show_tvdb_id, "title": media.title}],
             media.media_type,
             clear_first=False
         )
@@ -548,43 +567,61 @@ async def plex_webhook(
     matched_request = None
 
     # 1. Try TMDB ID (most reliable for movies and shows)
-    if media.tmdb_id:
-        matched = await mark_as_added(media.tmdb_id, media.media_type)
+    if show_tmdb_id:
+        matched = await mark_as_added(show_tmdb_id, media.media_type)
         if matched:
-            # If we matched and have a plex_guid, cache it for future
+            # Cache the plex_guid for future episode webhooks
             if media.plex_guid:
-                await update_plex_guid(media.tmdb_id, media.media_type, media.plex_guid)
+                await update_plex_guid(show_tmdb_id, media.media_type, media.plex_guid)
+                await set_plex_guid_cache(media.plex_guid, show_tmdb_id, show_tvdb_id)
 
     # 2. Try TVDB ID (common for TV shows)
-    if not matched and media.tvdb_id and media.media_type == 'tv':
-        matched_request = await find_by_tvdb_id(media.tvdb_id, media.media_type)
+    if not matched and show_tvdb_id and media.media_type == 'tv':
+        matched_request = await find_by_tvdb_id(show_tvdb_id, media.media_type)
         if matched_request:
             matched = await mark_as_added(matched_request['tmdb_id'], media.media_type)
             if matched and media.plex_guid:
                 await update_plex_guid(matched_request['tmdb_id'], media.media_type, media.plex_guid)
+                await set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], show_tvdb_id)
 
-    # 3. Try Plex GUID (for episodes/seasons using cached show GUID)
+    # 3. Try Plex GUID (for episodes/seasons using cached show GUID from requests table)
     if not matched and media.plex_guid:
         matched_request = await find_by_plex_guid(media.plex_guid)
         if matched_request:
             matched = await mark_as_added(matched_request['tmdb_id'], matched_request['media_type'])
+            if matched and not resolved_from_cache:
+                await set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], matched_request.get('tvdb_id'))
 
     # 4. Try TVDB reverse lookup (episode TVDB ID → show TVDB ID)
+    # Only do this if we have an episode TVDB ID and haven't matched yet
     if not matched and media.episode_tvdb_id:
         from tvdb import get_series_id_from_episode
-        show_tvdb_id = await get_series_id_from_episode(media.episode_tvdb_id)
-        if show_tvdb_id:
-            matched_request = await find_by_tvdb_id(show_tvdb_id, 'tv')
+        show_tvdb_id_resolved = await get_series_id_from_episode(media.episode_tvdb_id)
+        if show_tvdb_id_resolved:
+            matched_request = await find_by_tvdb_id(show_tvdb_id_resolved, 'tv')
             if matched_request:
                 matched = await mark_as_added(matched_request['tmdb_id'], 'tv')
                 if matched and media.plex_guid:
                     await update_plex_guid(matched_request['tmdb_id'], 'tv', media.plex_guid)
+                    # Cache for future episode webhooks of this show
+                    await set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], show_tvdb_id_resolved)
 
+            # Even if we didn't match a request, cache the resolved show IDs for future episodes
+            if media.plex_guid and not resolved_from_cache:
+                if matched_request:
+                    await set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], show_tvdb_id_resolved)
+                else:
+                    # Cache just the TVDB ID - future lookups can use this
+                    await set_plex_guid_cache(media.plex_guid, None, show_tvdb_id_resolved)
+
+    # Use resolved show-level TMDB ID in result (or original if show/movie)
+    result_tmdb_id = show_tmdb_id if show_tmdb_id else media.tmdb_id
     return {
         "status": "success",
         "title": media.title,
         "media_type": media.media_type,
-        "tmdb_id": media.tmdb_id,
+        "plex_type": media.plex_type,
+        "tmdb_id": result_tmdb_id,
         "added_to_library": added_to_library,
         "matched_request": matched
     }

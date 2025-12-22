@@ -41,6 +41,16 @@ async def init_db():
             )
         """)
 
+        # Plex GUID cache table for caching show-level IDs from episode webhooks
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plex_guid_cache (
+                plex_guid TEXT PRIMARY KEY,
+                show_tmdb_id INTEGER,
+                show_tvdb_id INTEGER,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Migration: Add new columns if missing (for existing databases)
         cursor = await db.execute("PRAGMA table_info(requests)")
         columns = [row[1] for row in await cursor.fetchall()]
@@ -250,3 +260,47 @@ async def get_library_ids(media_type: str | None = None) -> set[tuple[int, str]]
             cursor = await db.execute("SELECT tmdb_id, media_type FROM library")
         rows = await cursor.fetchall()
         return {(row[0], row[1]) for row in rows}
+
+
+# --- Plex GUID Cache ---
+# Caches plex_guid -> {tmdb_id, tvdb_id} for shows
+# This prevents repeated TVDB reverse lookups for episodes of the same show
+
+async def get_plex_guid_cache(plex_guid: str) -> dict | None:
+    """
+    Look up cached show-level IDs for a Plex GUID.
+    Returns dict with tmdb_id, tvdb_id if found, None otherwise.
+    """
+    async with aiosqlite.connect(settings.database_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT show_tmdb_id, show_tvdb_id FROM plex_guid_cache WHERE plex_guid = ?",
+            (plex_guid,)
+        )
+        row = await cursor.fetchone()
+        if row:
+            return {
+                'tmdb_id': row['show_tmdb_id'],
+                'tvdb_id': row['show_tvdb_id']
+            }
+        return None
+
+
+async def set_plex_guid_cache(plex_guid: str, tmdb_id: int | None, tvdb_id: int | None) -> bool:
+    """
+    Cache show-level IDs for a Plex GUID.
+    """
+    async with aiosqlite.connect(settings.database_path) as db:
+        try:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO plex_guid_cache (plex_guid, show_tmdb_id, show_tvdb_id)
+                VALUES (?, ?, ?)
+                """,
+                (plex_guid, tmdb_id, tvdb_id)
+            )
+            await db.commit()
+            return True
+        except Exception as e:
+            print(f"Error setting plex_guid cache: {e}")
+            return False

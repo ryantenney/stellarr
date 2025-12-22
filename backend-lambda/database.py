@@ -398,3 +398,51 @@ def get_library_ids(media_type: str | None = None) -> set[tuple[int, str]]:
     except Exception as e:
         print(f"Error getting library ids: {e}", flush=True)
         return set()
+
+
+# --- Plex GUID Cache ---
+# Caches plex_guid -> {tmdb_id, tvdb_id} for shows
+# This prevents repeated TVDB reverse lookups for episodes of the same show
+
+def get_plex_guid_cache(plex_guid: str) -> dict | None:
+    """
+    Look up cached show-level IDs for a Plex GUID.
+    Returns dict with tmdb_id, tvdb_id if found, None otherwise.
+    """
+    try:
+        item = _get_client().get_item({
+            'media_type': 'PLEX_GUID_CACHE',
+            'tmdb_id': hash(plex_guid) % (2**31)  # Use hash as sort key
+        })
+        # Verify the actual plex_guid matches (hash collision check)
+        if item and item.get('plex_guid') == plex_guid:
+            return {
+                'tmdb_id': item.get('show_tmdb_id'),
+                'tvdb_id': item.get('show_tvdb_id')
+            }
+        return None
+    except Exception as e:
+        print(f"Error getting plex_guid cache: {e}", flush=True)
+        return None
+
+
+def set_plex_guid_cache(plex_guid: str, tmdb_id: int | None, tvdb_id: int | None) -> bool:
+    """
+    Cache show-level IDs for a Plex GUID.
+    """
+    try:
+        item = {
+            'media_type': 'PLEX_GUID_CACHE',
+            'tmdb_id': hash(plex_guid) % (2**31),  # Use hash as sort key
+            'plex_guid': plex_guid,
+            'cached_at': datetime.now(timezone.utc).isoformat()
+        }
+        if tmdb_id is not None:
+            item['show_tmdb_id'] = tmdb_id
+        if tvdb_id is not None:
+            item['show_tvdb_id'] = tvdb_id
+        _get_client().put_item(item)
+        return True
+    except Exception as e:
+        print(f"Error setting plex_guid cache: {e}", flush=True)
+        return False
