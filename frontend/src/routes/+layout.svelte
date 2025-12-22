@@ -135,7 +135,9 @@
 
 	<!-- Feed URLs Modal -->
 	{#if showFeedModal}
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 		<div class="modal-overlay" on:click={() => showFeedModal = false}>
+			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 			<div class="modal" on:click|stopPropagation>
 				<div class="modal-header">
 					<h2>Feed URLs for Sonarr/Radarr</h2>
@@ -261,7 +263,8 @@
 		transition: color 0.2s;
 	}
 
-	nav a:hover {
+	nav a:hover,
+	nav a:active {
 		color: var(--text-primary);
 	}
 
@@ -275,7 +278,8 @@
 		transition: color 0.2s;
 	}
 
-	.nav-btn:hover {
+	.nav-btn:hover,
+	.nav-btn:active {
 		color: var(--text-primary);
 	}
 
@@ -289,7 +293,8 @@
 		transition: all 0.2s;
 	}
 
-	.logout-btn:hover {
+	.logout-btn:hover,
+	.logout-btn:active {
 		border-color: var(--error);
 		color: var(--error);
 	}
@@ -404,7 +409,7 @@
 		border-radius: 1rem;
 		max-width: 600px;
 		width: 100%;
-		max-height: 90vh;
+		max-height: min(90vh, 100dvh);
 		overflow-y: auto;
 	}
 
@@ -427,10 +432,19 @@
 		font-size: 1.5rem;
 		color: var(--text-secondary);
 		cursor: pointer;
+		min-width: 44px;
+		min-height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		transition: color 0.2s, background 0.2s;
 	}
 
-	.close-btn:hover {
+	.close-btn:hover,
+	.close-btn:active {
 		color: var(--text-primary);
+		background: var(--bg-tertiary);
 	}
 
 	.modal-content {
@@ -522,7 +536,8 @@
 		white-space: nowrap;
 	}
 
-	.feed-item button:hover {
+	.feed-item button:hover,
+	.feed-item button:active {
 		background: var(--accent-hover);
 	}
 

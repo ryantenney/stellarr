@@ -31,6 +31,15 @@ export function preloadAuthParams() {
 	getAuthParams().catch(() => {});
 }
 
+// Warm up Lambda by hitting a lightweight endpoint
+export async function warmup() {
+	try {
+		await fetch(`${API_BASE}/auth/params`);
+	} catch {
+		// Ignore errors - this is just a warmup
+	}
+}
+
 // Derive key using PBKDF2 (brute-force resistant)
 async function pbkdf2DeriveKey(password, salt, iterations) {
 	const encoder = new TextEncoder();

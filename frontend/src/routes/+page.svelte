@@ -1,7 +1,7 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { authenticated, loading, addToast, setAuthenticated } from '$lib/stores.js';
-	import { verifyPassword, search, getTrending, addRequest, getRequests } from '$lib/api.js';
+	import { verifyPassword, search, getTrending, addRequest, getRequests, warmup } from '$lib/api.js';
 
 	// Cache of requested items to hydrate cached trending results
 	let requestedItems = new Set();
@@ -14,12 +14,13 @@
 	let mediaFilter = 'all';
 	let searchTimeout = null;
 
-	// Pagination - dynamic based on grid columns
+	// Pagination - target ~20-24 items per page
 	let currentPage = 1;
 	let gridContainer;
 	let columnCount = 5;
-	const rowsPerPage = 4;
-	$: itemsPerPage = columnCount * rowsPerPage;
+	const targetItemsPerPage = 24;
+	$: itemsPerPage = targetItemsPerPage;
+	$: rowsPerPage = Math.ceil(targetItemsPerPage / columnCount);
 	$: totalPages = Math.ceil(displayResults.length / itemsPerPage);
 	$: paginatedResults = displayResults.slice(
 		(currentPage - 1) * itemsPerPage,
@@ -36,7 +37,20 @@
 
 	let resizeObserver;
 
+	// Handle PWA returning to foreground - warm up Lambda and refresh data
+	function handleVisibilityChange() {
+		if (document.visibilityState === 'visible' && $authenticated) {
+			// Warm up Lambda in background (don't await)
+			warmup();
+			// Refresh request status to hydrate any cached data
+			loadRequestedItems();
+		}
+	}
+
 	onMount(async () => {
+		// Listen for PWA being brought to foreground
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
 		if ($authenticated) {
 			// Load requests first to hydrate cached trending data
 			await loadRequestedItems();
@@ -73,6 +87,7 @@
 	}
 
 	onDestroy(() => {
+		document.removeEventListener('visibilitychange', handleVisibilityChange);
 		if (resizeObserver) {
 			resizeObserver.disconnect();
 		}
@@ -194,12 +209,23 @@
 {:else}
 	<div class="search-container">
 		<div class="search-box">
-			<input
-				type="text"
-				bind:value={searchQuery}
-				on:input={debounceSearch}
-				placeholder="Search for movies or TV shows..."
-			/>
+			<div class="search-input-wrapper">
+				<input
+					type="search"
+					bind:value={searchQuery}
+					on:input={debounceSearch}
+					on:keydown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+					enterkeyhint="search"
+					placeholder="Search for movies or TV shows..."
+				/>
+				{#if searchQuery}
+					<button
+						class="clear-btn"
+						on:click={() => { searchQuery = ''; searchResults = []; }}
+						aria-label="Clear search"
+					>×</button>
+				{/if}
+			</div>
 			<div class="filter-buttons">
 				<button
 					class:active={mediaFilter === 'all'}
@@ -250,11 +276,23 @@
 								<div class="rating-badge">{item.vote_average.toFixed(1)}</div>
 							{/if}
 							{#if item.in_library}
-								<div class="library-badge" title="Already in Plex">In Library</div>
-							{:else if item.number_of_seasons && item.number_of_seasons > 6}
-								<div class="seasons-warning" title="Large series - {item.number_of_seasons} seasons may take a while to download">
-									{item.number_of_seasons} Seasons
-								</div>
+								{#if item.media_type === 'movie' && item.imdb_id}
+									<a href="https://www.imdb.com/title/{item.imdb_id}" target="_blank" rel="noopener" class="library-badge" title="View in IMDb">In Library</a>
+								{:else if item.media_type === 'tv' && item.tvdb_id}
+									<a href="https://thetvdb.com/series/{item.tvdb_id}" target="_blank" rel="noopener" class="library-badge" title="View in TheTVDB">In Library</a>
+								{:else}
+									<div class="library-badge" title="Already in Plex">In Library</div>
+								{/if}
+							{:else if item.number_of_seasons}
+								{#if item.number_of_seasons > 10}
+									<div class="seasons-warning seasons-very-large" title="Very large series - {item.number_of_seasons} seasons may take significant time to download">
+										{item.number_of_seasons} Seasons
+									</div>
+								{:else if item.number_of_seasons > 6}
+									<div class="seasons-warning" title="Large series - {item.number_of_seasons} seasons may take a while to download">
+										{item.number_of_seasons} Seasons
+									</div>
+								{/if}
 							{/if}
 						</div>
 						<div class="info">
@@ -355,7 +393,8 @@
 		transition: background 0.2s;
 	}
 
-	.login-card button:hover:not(:disabled) {
+	.login-card button:hover:not(:disabled),
+	.login-card button:active:not(:disabled) {
 		background: var(--accent-hover);
 	}
 
@@ -374,8 +413,13 @@
 		gap: 1rem;
 	}
 
+	.search-input-wrapper {
+		position: relative;
+		width: 100%;
+	}
+
 	.search-box input {
-		padding: 1rem 1.5rem;
+		padding: 1rem 2.5rem 1rem 1.5rem;
 		border: 1px solid var(--border);
 		border-radius: 0.75rem;
 		background: var(--bg-secondary);
@@ -387,6 +431,38 @@
 	.search-box input:focus {
 		outline: none;
 		border-color: var(--accent);
+	}
+
+	/* Hide native search clear button (we have our own) */
+	.search-box input[type="search"]::-webkit-search-cancel-button {
+		-webkit-appearance: none;
+		appearance: none;
+	}
+
+	.clear-btn {
+		position: absolute;
+		right: 0.25rem;
+		top: 50%;
+		transform: translateY(-50%);
+		background: transparent;
+		border: none;
+		color: var(--text-secondary);
+		font-size: 1.25rem;
+		cursor: pointer;
+		min-width: 44px;
+		min-height: 44px;
+		line-height: 1;
+		border-radius: 50%;
+		transition: color 0.2s, background 0.2s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.clear-btn:hover,
+	.clear-btn:active {
+		color: var(--text-primary);
+		background: var(--bg-tertiary);
 	}
 
 	.filter-buttons {
@@ -404,7 +480,8 @@
 		transition: all 0.2s;
 	}
 
-	.filter-buttons button:hover {
+	.filter-buttons button:hover,
+	.filter-buttons button:active {
 		border-color: var(--accent);
 		color: var(--accent);
 	}
@@ -503,6 +580,15 @@
 		font-size: 0.7rem;
 		font-weight: 600;
 		color: white;
+		text-decoration: none;
+		display: inline-block;
+		cursor: pointer;
+		transition: background 0.2s;
+	}
+
+	.library-badge:hover {
+		background: rgba(76, 175, 80, 1);
+		text-decoration: underline;
 	}
 
 	.seasons-warning {
@@ -516,6 +602,10 @@
 		font-weight: 600;
 		color: white;
 		cursor: help;
+	}
+
+	.seasons-warning.seasons-very-large {
+		background: rgba(220, 38, 38, 0.9);
 	}
 
 	.info {
@@ -558,7 +648,8 @@
 		transition: all 0.2s;
 	}
 
-	.request-btn:hover:not(:disabled) {
+	.request-btn:hover:not(:disabled),
+	.request-btn:active:not(:disabled) {
 		background: var(--accent-hover);
 	}
 
@@ -598,7 +689,8 @@
 		transition: all 0.2s;
 	}
 
-	.pagination button:hover:not(:disabled) {
+	.pagination button:hover:not(:disabled),
+	.pagination button:active:not(:disabled) {
 		border-color: var(--accent);
 		color: var(--accent);
 	}

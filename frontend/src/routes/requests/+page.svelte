@@ -11,12 +11,13 @@
 	let itemToRemove = null;
 	let removing = false;
 
-	// Pagination - dynamic based on grid columns
+	// Pagination - target ~20-24 items per page
 	let currentPage = 1;
 	let gridContainer;
 	let columnCount = 5;
-	const rowsPerPage = 4;
-	$: itemsPerPage = columnCount * rowsPerPage;
+	const targetItemsPerPage = 24;
+	$: itemsPerPage = targetItemsPerPage;
+	$: rowsPerPage = Math.ceil(targetItemsPerPage / columnCount);
 
 	function updateColumnCount() {
 		if (!gridContainer) return;
@@ -286,7 +287,9 @@
 
 	<!-- Confirm Remove Modal -->
 	{#if showConfirmModal && itemToRemove}
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 		<div class="modal-overlay" on:click={cancelRemove}>
+			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 			<div class="modal confirm-modal" on:click|stopPropagation>
 				<div class="confirm-content">
 					<img src={getPosterUrl(itemToRemove.poster_path)} alt={itemToRemove.title} class="confirm-poster" />
@@ -353,7 +356,8 @@
 		transition: all 0.2s;
 	}
 
-	.filter-buttons button:hover {
+	.filter-buttons button:hover,
+	.filter-buttons button:active {
 		border-color: var(--accent);
 		color: var(--accent);
 	}
@@ -572,35 +576,6 @@
 		overflow-y: auto;
 	}
 
-	.modal-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1.5rem;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.modal-header h2 {
-		margin: 0;
-		font-size: 1.25rem;
-	}
-
-	.close-btn {
-		background: none;
-		border: none;
-		font-size: 1.5rem;
-		color: var(--text-secondary);
-		cursor: pointer;
-	}
-
-	.close-btn:hover {
-		color: var(--text-primary);
-	}
-
-	.modal-content {
-		padding: 1.5rem;
-	}
-
 	/* Confirm Modal */
 	.confirm-modal {
 		max-width: 400px;
@@ -650,7 +625,8 @@
 		transition: all 0.2s;
 	}
 
-	.cancel-btn:hover:not(:disabled) {
+	.cancel-btn:hover:not(:disabled),
+	.cancel-btn:active:not(:disabled) {
 		border-color: var(--text-primary);
 		color: var(--text-primary);
 	}
@@ -666,7 +642,8 @@
 		transition: all 0.2s;
 	}
 
-	.confirm-btn:hover:not(:disabled) {
+	.confirm-btn:hover:not(:disabled),
+	.confirm-btn:active:not(:disabled) {
 		background: #dc2626;
 	}
 
@@ -696,7 +673,8 @@
 		transition: all 0.2s;
 	}
 
-	.pagination button:hover:not(:disabled) {
+	.pagination button:hover:not(:disabled),
+	.pagination button:active:not(:disabled) {
 		border-color: var(--accent);
 		color: var(--accent);
 	}
@@ -711,12 +689,6 @@
 	}
 
 	@media (max-width: 768px) {
-		.header {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 1rem;
-		}
-
 		.filters-row {
 			flex-direction: column;
 			align-items: flex-start;
