@@ -35,6 +35,25 @@
 		currentPage * itemsPerPage
 	);
 
+	// Infinite scroll for mobile
+	let isMobile = false;
+	let visibleCount = targetItemsPerPage;
+	let loadMoreObserver;
+	let loadMoreTrigger;
+
+	$: infiniteResults = displayResults.slice(0, visibleCount);
+	$: hasMore = visibleCount < displayResults.length;
+
+	function checkMobile() {
+		isMobile = window.innerWidth <= 768;
+	}
+
+	function loadMore() {
+		if (hasMore) {
+			visibleCount = Math.min(visibleCount + targetItemsPerPage, displayResults.length);
+		}
+	}
+
 	function updateColumnCount() {
 		if (!gridContainer) return;
 		const containerWidth = gridContainer.offsetWidth;
@@ -57,11 +76,28 @@
 		// Listen for PWA being brought to foreground
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
+		// Check if mobile and listen for resize
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+
 		if ($authenticated) {
 			// Load trending (uses cached key from localStorage if available)
 			await loadTrending();
 		}
 	});
+
+	// Set up IntersectionObserver for infinite scroll trigger
+	$: if (loadMoreTrigger && isMobile && !loadMoreObserver) {
+		loadMoreObserver = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting && hasMore) {
+					loadMore();
+				}
+			},
+			{ rootMargin: '200px' }
+		);
+		loadMoreObserver.observe(loadMoreTrigger);
+	}
 
 	// Reactively load trending when trendingKey becomes available (from layout's library-status fetch)
 	$: if ($authenticated && $libraryStatus.trendingKey && !trendingLoaded && trendingResults.length === 0) {
@@ -92,8 +128,12 @@
 
 	onDestroy(() => {
 		document.removeEventListener('visibilitychange', handleVisibilityChange);
+		window.removeEventListener('resize', checkMobile);
 		if (resizeObserver) {
 			resizeObserver.disconnect();
+		}
+		if (loadMoreObserver) {
+			loadMoreObserver.disconnect();
 		}
 		if (searchTimeout) {
 			clearTimeout(searchTimeout);
@@ -193,8 +233,11 @@
 	$: displayResults = searchQuery.trim() ? hydratedSearch : hydratedTrending;
 	$: sectionTitle = searchQuery.trim() ? 'Search Results' : 'Trending';
 
-	// Reset page when search/filter changes
-	$: if (searchQuery || mediaFilter) currentPage = 1;
+	// Reset page/scroll when search/filter changes
+	$: if (searchQuery || mediaFilter) {
+		currentPage = 1;
+		visibleCount = targetItemsPerPage;
+	}
 </script>
 
 {#if !$authenticated}
@@ -273,7 +316,7 @@
 			<p class="no-results">No results found</p>
 		{:else}
 			<div class="media-grid">
-				{#each paginatedResults as item (item.id + item.media_type)}
+				{#each (isMobile ? infiniteResults : paginatedResults) as item (item.id + item.media_type)}
 					<div class="media-card">
 						<div class="poster">
 							<div class="poster-placeholder">
@@ -334,7 +377,14 @@
 				{/each}
 			</div>
 
-			{#if totalPages > 1}
+			{#if isMobile}
+				<!-- Infinite scroll trigger -->
+				<div bind:this={loadMoreTrigger} class="load-more-trigger">
+					{#if hasMore}
+						<div class="loading-more">Loading more...</div>
+					{/if}
+				</div>
+			{:else if totalPages > 1}
 				<div class="pagination">
 					<button
 						disabled={currentPage === 1}
@@ -719,10 +769,24 @@
 		color: var(--text-secondary);
 	}
 
+	/* Infinite scroll */
+	.load-more-trigger {
+		padding: 2rem;
+		text-align: center;
+	}
+
+	.loading-more {
+		color: var(--text-secondary);
+	}
+
 	@media (max-width: 768px) {
 		.media-grid {
 			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 			gap: 1rem;
+		}
+
+		.pagination {
+			display: none;
 		}
 	}
 </style>
