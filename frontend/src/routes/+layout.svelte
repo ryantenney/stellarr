@@ -1,11 +1,12 @@
 <script>
 	import { onMount } from 'svelte';
-	import { authenticated, logout, toasts, addToast, updateLibraryStatus, pushSubscribed, pushSupported, pushPermission, checkPushPermission } from '$lib/stores.js';
+	import { authenticated, logout, toasts, addToast, updateLibraryStatus, pushSubscribed, pushSupported, pushPermission, checkPushPermission, iosBrowserNeedsPwa } from '$lib/stores.js';
 	import { preloadAuthParams, getFeedInfo, getLibraryStatus, getVapidPublicKey, subscribePush, unsubscribePush, getPushStatus } from '$lib/api.js';
 
 	const appName = import.meta.env.VITE_APP_NAME || 'Overseer';
 
 	let showFeedModal = false;
+	let showPwaModal = false;
 	let feedInfo = null;
 	let loadingFeeds = false;
 	let pushLoading = false;
@@ -281,21 +282,21 @@
 							on:click={togglePush}
 							title={$pushSubscribed ? 'Disable notifications' : 'Enable notifications'}
 						>
-							{#if pushLoading}
-								<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-									<path d="M13.73 21a2 2 0 0 1-3.46 0" />
-								</svg>
-							{:else if $pushSubscribed}
-								<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-									<path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
-								</svg>
-							{:else}
-								<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-									<path d="M13.73 21a2 2 0 0 1-3.46 0" />
-								</svg>
-							{/if}
+							<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill={$pushSubscribed && !pushLoading ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+								<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+								<path d="M13.73 21a2 2 0 0 1-3.46 0" />
+							</svg>
+						</button>
+					{:else if $iosBrowserNeedsPwa}
+						<button
+							class="nav-btn"
+							on:click={() => showPwaModal = true}
+							title="Enable notifications"
+						>
+							<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+								<path d="M13.73 21a2 2 0 0 1-3.46 0" />
+							</svg>
 						</button>
 					{/if}
 					<button class="nav-btn logout-btn" on:click={logout} title="Logout">
@@ -367,6 +368,46 @@
 					{:else}
 						<div class="error">Failed to load feed info</div>
 					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- iOS PWA Install Modal -->
+	{#if showPwaModal}
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+		<div class="modal-overlay" on:click={() => showPwaModal = false}>
+			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+			<div class="modal pwa-modal" on:click|stopPropagation>
+				<div class="modal-header">
+					<h2>Enable Notifications</h2>
+					<button class="close-btn" on:click={() => showPwaModal = false}>&times;</button>
+				</div>
+				<div class="modal-content">
+					<p>To receive push notifications on iOS, you need to install this app to your home screen.</p>
+					<div class="pwa-steps">
+						<div class="pwa-step">
+							<span class="step-number">1</span>
+							<span>Tap the <strong>Share</strong> button</span>
+							<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+								<polyline points="16,6 12,2 8,6" />
+								<line x1="12" y1="2" x2="12" y2="15" />
+							</svg>
+						</div>
+						<div class="pwa-step">
+							<span class="step-number">2</span>
+							<span>Scroll down and tap <strong>Add to Home Screen</strong></span>
+						</div>
+						<div class="pwa-step">
+							<span class="step-number">3</span>
+							<span>Open the app from your home screen</span>
+						</div>
+						<div class="pwa-step">
+							<span class="step-number">4</span>
+							<span>Tap the bell icon to enable notifications</span>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -720,5 +761,52 @@
 		.feed-item button {
 			width: 100%;
 		}
+	}
+
+	/* PWA Install Modal */
+	.pwa-modal {
+		max-width: 400px;
+	}
+
+	.pwa-modal .modal-content p {
+		margin: 0 0 1.5rem 0;
+		color: var(--text-secondary);
+		line-height: 1.5;
+	}
+
+	.pwa-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.pwa-step {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem;
+		background: var(--bg-tertiary);
+		border-radius: 0.5rem;
+	}
+
+	.step-number {
+		width: 1.75rem;
+		height: 1.75rem;
+		background: var(--accent);
+		color: white;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 600;
+		font-size: 0.875rem;
+		flex-shrink: 0;
+	}
+
+	.share-icon {
+		width: 1.25rem;
+		height: 1.25rem;
+		color: var(--accent);
+		flex-shrink: 0;
 	}
 </style>

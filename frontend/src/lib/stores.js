@@ -254,12 +254,33 @@ export function clearLibraryStatus() {
 export const pushSubscribed = writable(false);
 export const pushSupported = writable(false);
 export const pushPermission = writable('default');
+export const iosBrowserNeedsPwa = writable(false);
+
+// Detect iOS device
+function isIOS() {
+	if (!browser) return false;
+	return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+		(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// Detect if running as installed PWA
+function isInstalledPwa() {
+	if (!browser) return false;
+	return window.matchMedia('(display-mode: standalone)').matches ||
+		window.navigator.standalone === true;
+}
 
 // Check if push is supported
 export function checkPushSupport() {
 	if (!browser) return false;
 	const supported = 'serviceWorker' in navigator && 'PushManager' in window;
 	pushSupported.set(supported);
+
+	// iOS browser (not installed as PWA) can support push if installed
+	if (!supported && isIOS() && !isInstalledPwa()) {
+		iosBrowserNeedsPwa.set(true);
+	}
+
 	return supported;
 }
 
