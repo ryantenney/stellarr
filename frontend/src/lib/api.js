@@ -1,4 +1,4 @@
-import { getSessionToken, getUserName, logout } from './stores.js';
+import { getSessionToken, getUserName, logout, getTrendingKey } from './stores.js';
 
 const API_BASE = '/api';
 
@@ -129,7 +129,21 @@ export async function search(query, mediaType = null, page = 1) {
 }
 
 export async function getTrending(mediaType = 'all') {
-	return request(`/trending?media_type=${mediaType}`);
+	// Trending endpoint is now public but requires the trending key
+	const key = getTrendingKey();
+	if (!key) {
+		throw new Error('Trending key not available - fetch library status first');
+	}
+
+	// Direct fetch without auth header (public endpoint)
+	const response = await fetch(`${API_BASE}/trending?media_type=${mediaType}&key=${key}`);
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+		throw new Error(error.detail || 'Request failed');
+	}
+
+	return response.json();
 }
 
 export async function getRequests(mediaType = null) {
@@ -157,4 +171,8 @@ export async function removeRequest(tmdbId, mediaType) {
 
 export async function getFeedInfo() {
 	return request('/feeds');
+}
+
+export async function getLibraryStatus() {
+	return request('/library-status');
 }

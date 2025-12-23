@@ -1,10 +1,16 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
-	import { authenticated, loading, addToast, setAuthenticated } from '$lib/stores.js';
-	import { verifyPassword, search, getTrending, addRequest, getRequests, warmup } from '$lib/api.js';
-
-	// Cache of requested items to hydrate cached trending results
-	let requestedItems = new Set();
+	import {
+		authenticated,
+		loading,
+		addToast,
+		setAuthenticated,
+		librarySet,
+		requestsMap,
+		updateLibraryStatus,
+		addToRequestsOptimistic
+	} from '$lib/stores.js';
+	import { verifyPassword, search, getTrending, addRequest, getLibraryStatus, warmup } from '$lib/api.js';
 
 	let password = '';
 	let userName = '';
@@ -13,6 +19,7 @@
 	let trendingResults = [];
 	let mediaFilter = 'all';
 	let searchTimeout = null;
+	let libraryStatusLoaded = false;
 
 	// Pagination - target ~20-24 items per page
 	let currentPage = 1;
@@ -42,8 +49,8 @@
 		if (document.visibilityState === 'visible' && $authenticated) {
 			// Warm up Lambda in background (don't await)
 			warmup();
-			// Refresh request status to hydrate any cached data
-			loadRequestedItems();
+			// Refresh library status
+			refreshLibraryStatus();
 		}
 	}
 
@@ -52,30 +59,36 @@
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		if ($authenticated) {
-			// Load requests first to hydrate cached trending data
-			await loadRequestedItems();
+			// Load library status first (contains trending key needed for trending fetch)
+			await refreshLibraryStatus();
 			await loadTrending();
 		}
 	});
 
-	async function loadRequestedItems() {
+	async function refreshLibraryStatus() {
 		try {
-			const data = await getRequests();
-			requestedItems = new Set(
-				data.requests.map(r => `${r.media_type}:${r.tmdb_id}`)
-			);
+			const data = await getLibraryStatus();
+			updateLibraryStatus(data);
+			libraryStatusLoaded = true;
 		} catch (error) {
-			console.error('Failed to load requests:', error);
+			console.error('Failed to load library status:', error);
+			// Still allow trending if we have a cached key
+			libraryStatusLoaded = true;
 		}
 	}
 
-	function hydrateResults(results) {
-		// Merge current request status into results (for cached data)
-		return results.map(item => ({
+	// Hydrate a single item with library/request status from stores
+	function hydrateItem(item) {
+		return {
 			...item,
-			requested: item.requested || requestedItems.has(`${item.media_type}:${item.id}`)
-		}));
+			requested: $requestsMap.has(`${item.media_type}:${item.id}`),
+			in_library: $librarySet.has(`${item.media_type}:${item.id}`)
+		};
 	}
+
+	// Reactive: compute hydrated results when source data or stores change
+	$: hydratedTrending = trendingResults.map(hydrateItem);
+	$: hydratedSearch = searchResults.map(hydrateItem);
 
 	// Set up resize observer when grid container becomes available
 	$: if (gridContainer && !resizeObserver) {
@@ -106,6 +119,8 @@
 			const response = await verifyPassword(password, userName.trim());
 			setAuthenticated(response.token, response.name);
 			addToast(`Welcome, ${response.name}!`, 'success');
+			// Fetch library status first (gets trending key)
+			await refreshLibraryStatus();
 			await loadTrending();
 		} catch (error) {
 			addToast(error.message || 'Invalid credentials', 'error');
@@ -117,9 +132,12 @@
 	async function loadTrending() {
 		try {
 			const data = await getTrending(mediaFilter === 'all' ? 'all' : mediaFilter);
-			trendingResults = hydrateResults(data.results);
+			// Store raw results - hydration happens reactively
+			trendingResults = data.results;
 		} catch (error) {
 			console.error('Failed to load trending:', error);
+			// If trending fails (e.g., no key yet), show empty
+			trendingResults = [];
 		}
 	}
 
@@ -133,7 +151,8 @@
 			$loading = true;
 			const filterType = mediaFilter === 'all' ? null : mediaFilter;
 			const data = await search(searchQuery, filterType);
-			searchResults = hydrateResults(data.results);
+			// Store raw results - hydration happens reactively
+			searchResults = data.results;
 		} catch (error) {
 			addToast('Search failed', 'error');
 		} finally {
@@ -153,14 +172,15 @@
 
 	async function handleRequest(item) {
 		try {
+			// Optimistic update - add to store immediately
+			addToRequestsOptimistic(item.id, item.media_type, item.title);
+
+			// API call in background
 			await addRequest(item.id, item.media_type);
-			// Update local cache for future hydration
-			requestedItems.add(`${item.media_type}:${item.id}`);
-			item.requested = true;
-			searchResults = [...searchResults];
-			trendingResults = [...trendingResults];
 			addToast(`Added "${item.title}" to requests`, 'success');
 		} catch (error) {
+			// Revert on failure by refreshing from server
+			await refreshLibraryStatus();
 			addToast('Failed to add request', 'error');
 		}
 	}
@@ -175,7 +195,7 @@
 		event.target.style.display = 'none';
 	}
 
-	$: displayResults = searchQuery.trim() ? searchResults : trendingResults;
+	$: displayResults = searchQuery.trim() ? hydratedSearch : hydratedTrending;
 	$: sectionTitle = searchQuery.trim() ? 'Search Results' : 'Trending';
 
 	// Reset page when search/filter changes

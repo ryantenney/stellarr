@@ -160,3 +160,69 @@ resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${aws_lambda_function.api.function_name}"
   retention_in_days = 14
 }
+
+
+# =============================================================================
+# EventBridge Rule for Trending Cache Warming
+# Triggers the API every 24 hours to keep CloudFront cache warm
+# =============================================================================
+
+resource "aws_cloudwatch_event_rule" "trending_cache_warmer" {
+  name                = "${local.name_prefix}-trending-cache-warmer"
+  description         = "Trigger trending API to warm CloudFront cache"
+  schedule_expression = "rate(24 hours)"
+
+  tags = {
+    Name = "${local.name_prefix}-trending-cache-warmer"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "trending_cache_warmer" {
+  rule      = aws_cloudwatch_event_rule.trending_cache_warmer.name
+  target_id = "TrendingCacheWarmer"
+  arn       = aws_lambda_function.cache_warmer.arn
+}
+
+# Separate lightweight Lambda for cache warming
+# Uses the main API Lambda code but invoked with specific event
+resource "aws_lambda_function" "cache_warmer" {
+  function_name = "${local.name_prefix}-cache-warmer"
+  role          = aws_iam_role.lambda.arn
+  handler       = "cache_warmer.handler"
+  runtime       = "python3.12"
+  architectures = ["arm64"]
+  timeout       = 60  # Needs time to fetch trending + TMDB lookups
+  memory_size   = 256  # Minimal memory needed
+
+  # Placeholder - will be updated by CI/CD
+  filename         = data.archive_file.lambda_placeholder.output_path
+  source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE  = aws_dynamodb_table.requests.name
+      APP_SECRET_ARN  = aws_secretsmanager_secret.app_config.arn
+      AWS_REGION_NAME = var.aws_region
+      BASE_URL        = "https://${var.domain_name}"
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-cache-warmer"
+  }
+}
+
+# CloudWatch Log Group for cache warmer
+resource "aws_cloudwatch_log_group" "cache_warmer" {
+  name              = "/aws/lambda/${aws_lambda_function.cache_warmer.function_name}"
+  retention_in_days = 7  # Less retention needed for cache warmer logs
+}
+
+# Allow EventBridge to invoke the cache warmer Lambda
+resource "aws_lambda_permission" "cache_warmer_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.cache_warmer.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.trending_cache_warmer.arn
+}

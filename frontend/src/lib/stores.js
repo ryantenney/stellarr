@@ -1,8 +1,11 @@
-import { writable } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 
 // Session duration: 30 days in milliseconds
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Library status cache duration: 24 hours (match backend trending cache)
+const LIBRARY_STATUS_CACHE_MS = 24 * 60 * 60 * 1000;
 
 // Check if session is still valid
 function isSessionValid() {
@@ -91,10 +94,11 @@ export function setAuthenticated(token, name = null) {
 	authenticated.set(true);
 }
 
-// Logout - clear session
+// Logout - clear session and library status
 export function logout() {
 	if (browser) {
 		localStorage.removeItem('auth_session');
+		localStorage.removeItem('library_status');
 	}
 	authenticated.set(false);
 }
@@ -117,4 +121,127 @@ export function addToast(message, type = 'info', duration = 3000) {
 	setTimeout(() => {
 		toasts.update((t) => t.filter((toast) => toast.id !== id));
 	}, duration);
+}
+
+// =============================================================================
+// Library Status Store - Cached library and request state for fast hydration
+// =============================================================================
+
+// Shape: { library: {movie: [], tv: []}, requests: [], trendingKey: string, timestamp: number }
+function loadLibraryStatus() {
+	if (!browser) return null;
+
+	const data = localStorage.getItem('library_status');
+	if (!data) return null;
+
+	try {
+		const parsed = JSON.parse(data);
+		// Check if cache is still valid
+		if (parsed.timestamp && Date.now() - parsed.timestamp < LIBRARY_STATUS_CACHE_MS) {
+			return parsed;
+		}
+		// Cache expired, but still return it for immediate hydration
+		// (will be refreshed in background)
+		return parsed;
+	} catch {
+		return null;
+	}
+}
+
+const initialLibraryStatus = loadLibraryStatus() || {
+	library: { movie: [], tv: [] },
+	requests: [],
+	trendingKey: null,
+	timestamp: 0
+};
+
+export const libraryStatus = writable(initialLibraryStatus);
+
+// Persist to localStorage on changes
+if (browser) {
+	libraryStatus.subscribe((value) => {
+		if (value && value.timestamp) {
+			localStorage.setItem('library_status', JSON.stringify(value));
+		}
+	});
+}
+
+// Update the library status from API response
+export function updateLibraryStatus(data) {
+	libraryStatus.set({
+		library: data.library || { movie: [], tv: [] },
+		requests: data.requests || [],
+		trendingKey: data.trending_key || null,
+		timestamp: Date.now()
+	});
+}
+
+// Get trending key from store
+export function getTrendingKey() {
+	if (!browser) return null;
+
+	const data = localStorage.getItem('library_status');
+	if (!data) return null;
+
+	try {
+		const parsed = JSON.parse(data);
+		return parsed.trendingKey || null;
+	} catch {
+		return null;
+	}
+}
+
+// Derived store: Set of library TMDB IDs for fast lookup
+export const librarySet = derived(libraryStatus, ($status) => {
+	const set = new Set();
+	if ($status.library) {
+		for (const id of $status.library.movie || []) {
+			set.add(`movie:${id}`);
+		}
+		for (const id of $status.library.tv || []) {
+			set.add(`tv:${id}`);
+		}
+	}
+	return set;
+});
+
+// Derived store: Map of request TMDB IDs for fast lookup
+export const requestsMap = derived(libraryStatus, ($status) => {
+	const map = new Map();
+	if ($status.requests) {
+		for (const req of $status.requests) {
+			map.set(`${req.media_type}:${req.tmdb_id}`, req);
+		}
+	}
+	return map;
+});
+
+// Add an item to requests optimistically
+export function addToRequestsOptimistic(tmdbId, mediaType, title) {
+	libraryStatus.update((status) => {
+		const newRequest = {
+			tmdb_id: tmdbId,
+			media_type: mediaType,
+			title: title,
+			created_at: new Date().toISOString()
+		};
+		return {
+			...status,
+			requests: [...status.requests, newRequest],
+			timestamp: Date.now()
+		};
+	});
+}
+
+// Clear library status on logout
+export function clearLibraryStatus() {
+	if (browser) {
+		localStorage.removeItem('library_status');
+	}
+	libraryStatus.set({
+		library: { movie: [], tv: [] },
+		requests: [],
+		trendingKey: null,
+		timestamp: 0
+	});
 }

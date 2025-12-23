@@ -98,6 +98,7 @@ get_tf_outputs() {
     LAMBDA_FUNCTION=$(terraform output -raw lambda_function_name 2>/dev/null) || true
     LAMBDA_BUCKET=$(terraform output -raw lambda_deployment_bucket 2>/dev/null) || true
     CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null) || true
+    CACHE_WARMER_FUNCTION=$(terraform output -raw cache_warmer_function_name 2>/dev/null) || true
 
     cd "$SCRIPT_DIR"
 
@@ -137,6 +138,17 @@ deploy_backend() {
 
     cd "$SCRIPT_DIR/backend-lambda"
     ./deploy.sh "$LAMBDA_FUNCTION" "$LAMBDA_BUCKET"
+
+    # Also update cache warmer Lambda (same code package)
+    if [ -n "$CACHE_WARMER_FUNCTION" ]; then
+        echo "Updating cache warmer Lambda..."
+        aws lambda update-function-code \
+            --function-name "$CACHE_WARMER_FUNCTION" \
+            --s3-bucket "$LAMBDA_BUCKET" \
+            --s3-key "lambda/overseer-lite.zip" \
+            --region us-east-1
+    fi
+
     cd "$SCRIPT_DIR"
 
     echo -e "${GREEN}Backend deployment complete!${NC}"

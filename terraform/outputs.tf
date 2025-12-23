@@ -37,3 +37,8 @@ output "app_secret_arn" {
   description = "ARN of the application config secret"
   value       = aws_secretsmanager_secret.app_config.arn
 }
+
+output "cache_warmer_function_name" {
+  description = "Lambda function name for cache warmer"
+  value       = aws_lambda_function.cache_warmer.function_name
+}

@@ -491,11 +491,35 @@ def list_requests(media_type: str | None = None, _: bool = Depends(verify_sessio
 
 # --- Trending/Popular ---
 
-@app.get("/api/trending")
-async def get_trending(media_type: str = "all", _: bool = Depends(verify_session_token)):
-    """Get trending movies/TV shows."""
-    tmdb = get_tmdb_client()
+def verify_trending_key(key: str | None = Query(None, alias="key")):
+    """Verify the trending API key (security-by-obscurity)."""
     db = get_database()
+    stored_key = db.get_trending_key()
+
+    if not stored_key:
+        # No key configured yet - reject
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if not key:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if not secrets.compare_digest(key, stored_key):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return True
+
+
+@app.get("/api/trending")
+async def get_trending(
+    media_type: str = "all",
+    _: bool = Depends(verify_trending_key)
+):
+    """
+    Get trending movies/TV shows.
+    Public endpoint protected by obscure key (for CloudFront caching).
+    Returns pure TMDB data - no user-specific status.
+    """
+    tmdb = get_tmdb_client()
     try:
         results = await tmdb.get_trending(media_type)
 
@@ -513,9 +537,6 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
                 title = item.get("title", "Unknown")
                 year = item.get("release_date", "")[:4] if item.get("release_date") else None
 
-            requested = db.is_requested(tmdb_id, item_type)
-            in_library = db.is_in_library(tmdb_id, item_type)
-
             item_data = {
                 "id": tmdb_id,
                 "title": title,
@@ -524,14 +545,12 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
                 "poster_path": item.get("poster_path"),
                 "media_type": item_type,
                 "vote_average": item.get("vote_average"),
-                "requested": requested,
-                "in_library": in_library,
                 "number_of_seasons": None
             }
             items.append(item_data)
 
-            # Track TV shows that aren't already requested/in_library for season fetch
-            if item_type == "tv" and not requested and not in_library:
+            # Track TV shows for season fetch
+            if item_type == "tv":
                 tv_shows_to_fetch.append((len(items) - 1, tmdb_id))
 
         # Fetch season counts for TV shows in parallel
@@ -552,10 +571,38 @@ async def get_trending(media_type: str = "all", _: bool = Depends(verify_session
         return Response(
             content=json.dumps({"results": items}),
             media_type="application/json",
-            headers={"Cache-Control": "public, max-age=3600"}  # 1 hour
+            headers={"Cache-Control": "public, max-age=86400"}  # 24 hours
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Library Status (for frontend caching) ---
+
+@app.get("/api/library-status")
+def get_library_status(_: bool = Depends(verify_session_token)):
+    """
+    Get library and request status for frontend caching.
+    Returns trending key so frontend can fetch public trending endpoint.
+    """
+    db = get_database()
+
+    # Get all library TMDB IDs (just IDs, not full objects)
+    library = db.get_all_library_tmdb_ids()
+
+    # Get all pending requests (full objects for display)
+    all_requests = db.get_all_requests()
+    # Filter to only pending (not yet added)
+    pending_requests = [r for r in all_requests if not r.get('added_at')]
+
+    # Get or create trending key
+    trending_key = db.get_or_create_trending_key()
+
+    return {
+        "library": library,
+        "requests": pending_requests,
+        "trending_key": trending_key
+    }
 
 
 # --- RSS Feeds ---

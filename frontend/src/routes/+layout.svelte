@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
-	import { authenticated, logout, toasts, addToast } from '$lib/stores.js';
-	import { preloadAuthParams, getFeedInfo } from '$lib/api.js';
+	import { authenticated, logout, toasts, addToast, updateLibraryStatus } from '$lib/stores.js';
+	import { preloadAuthParams, getFeedInfo, getLibraryStatus } from '$lib/api.js';
 
 	let showFeedModal = false;
 	let feedInfo = null;
@@ -10,7 +10,22 @@
 	onMount(() => {
 		// Preload auth params on page load to warm up Lambda
 		preloadAuthParams();
+
+		// If authenticated, fetch library status in background
+		if ($authenticated) {
+			refreshLibraryStatus();
+		}
 	});
+
+	// Fetch library status and update store
+	async function refreshLibraryStatus() {
+		try {
+			const data = await getLibraryStatus();
+			updateLibraryStatus(data);
+		} catch (error) {
+			console.error('Failed to fetch library status:', error);
+		}
+	}
 
 	async function openFeedModal() {
 		showFeedModal = true;

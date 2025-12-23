@@ -304,3 +304,82 @@ async def set_plex_guid_cache(plex_guid: str, tmdb_id: int | None, tvdb_id: int 
         except Exception as e:
             print(f"Error setting plex_guid cache: {e}")
             return False
+
+
+# --- Config/Instance Settings ---
+
+async def get_trending_key() -> str | None:
+    """Get the trending API key from config."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        # Ensure config table exists
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT value FROM config WHERE key = 'trending_key'"
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def set_trending_key(key: str) -> bool:
+    """Set or update the trending API key."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        try:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO config (key, value)
+                VALUES ('trending_key', ?)
+                """,
+                (key,)
+            )
+            await db.commit()
+            return True
+        except Exception as e:
+            print(f"Error setting trending key: {e}")
+            return False
+
+
+async def get_or_create_trending_key() -> str:
+    """Get existing trending key or create a new one."""
+    import secrets as sec
+    key = await get_trending_key()
+    if not key:
+        key = sec.token_urlsafe(32)
+        await set_trending_key(key)
+        print(f"Generated new trending key")
+    return key
+
+
+# --- Library Status (for cached frontend hydration) ---
+
+async def get_all_library_tmdb_ids() -> dict[str, list[int]]:
+    """
+    Get all TMDB IDs in library, grouped by media type.
+    Returns: {"movie": [id1, id2, ...], "tv": [id1, id2, ...]}
+    """
+    async with aiosqlite.connect(settings.database_path) as db:
+        result = {"movie": [], "tv": []}
+
+        for media_type in ['movie', 'tv']:
+            cursor = await db.execute(
+                "SELECT tmdb_id FROM library WHERE media_type = ?",
+                (media_type,)
+            )
+            rows = await cursor.fetchall()
+            result[media_type] = [row[0] for row in rows]
+
+        return result

@@ -61,7 +61,8 @@ Both backends expose the same FastAPI endpoints. Changes to API structure must b
 - `/api/auth/params` - Returns PBKDF2 iterations for client-side key derivation
 - `/api/auth/verify` - Password authentication, returns HMAC-SHA256 signed token
 - `/api/search` - TMDB search with media type filter
-- `/api/trending` - Trending media (cached 1hr via CloudFront)
+- `/api/trending?key=XXX` - Trending media (public, 24hr CloudFront cache, requires instance key)
+- `/api/library-status` - Library IDs + pending requests + trending key (authenticated)
 - `/api/request`, `/api/requests` - Add/list/remove requests
 - `/api/feeds` - Get feed URLs for UI
 - `/list/radarr`, `/list/sonarr` - JSON feeds for import lists
@@ -81,7 +82,9 @@ Both backends expose the same FastAPI endpoints. Changes to API structure must b
 
 **Lambda-specific:** `dynamodb_lite.py` + `aws_sigv4.py` (lightweight DynamoDB without boto3 for cold start optimization)
 
-**Frontend:** `src/routes/+page.svelte` (search/home), `src/routes/requests/+page.svelte` (request list), `src/routes/+layout.svelte` (nav, feeds modal, PWA setup), `src/lib/api.js` (HTTP client), `src/lib/stores.js` (auth state)
+**Frontend:** `src/routes/+page.svelte` (search/home), `src/routes/requests/+page.svelte` (request list), `src/routes/+layout.svelte` (nav, feeds modal, PWA setup), `src/lib/api.js` (HTTP client), `src/lib/stores.js` (auth state, library status cache)
+
+**Cache Warmer:** `cache_warmer.py` (Lambda triggered by EventBridge every 24h to keep trending cache warm)
 
 **Scripts:** `scripts/plex-sync.py` (bulk library sync)
 
@@ -96,7 +99,15 @@ Optional: `FEED_TOKEN` (protects feed endpoints), `PLEX_WEBHOOK_TOKEN` (protects
 - Items can exist in requests without IMDB/TVDB IDs but won't appear in respective feeds (UI shows warnings)
 - Lambda uses lazy imports and bytecode precompilation for cold start optimization
 - Vite dev server proxies `/api`, `/rss`, `/list`, `/webhook`, `/sync` to `localhost:8000`
-- `/api/trending` is cached by CloudFront (1hr); frontend hydrates with current request status client-side
 - Library table tracks items in Plex; populated via webhook (incremental) or sync endpoint (bulk)
 - Plex webhook logs use `WEBHOOK:` prefix; sync logs use `SYNC:` prefix (for CloudWatch filtering)
 - Frontend is a PWA with iOS/Android home screen support
+
+### Trending Cache Architecture
+- `/api/trending` is a public endpoint protected by an instance-specific secret key (security-by-obscurity)
+- Trending key is auto-generated on first use and stored in DynamoDB/SQLite config table
+- CloudFront caches the response for 24 hours (including the key in the cache key)
+- EventBridge triggers a cache warmer Lambda every 24h to keep CloudFront cache populated
+- Frontend fetches library/request status on login via `/api/library-status` which includes the trending key
+- Library status is cached in localStorage and used to hydrate trending/search results client-side
+- This architecture ensures: (a) trending is cached for all users, (b) private status stays protected, (c) cache auto-refreshes daily

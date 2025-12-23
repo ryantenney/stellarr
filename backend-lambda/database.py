@@ -446,3 +446,71 @@ def set_plex_guid_cache(plex_guid: str, tmdb_id: int | None, tvdb_id: int | None
     except Exception as e:
         print(f"Error setting plex_guid cache: {e}", flush=True)
         return False
+
+
+# --- Config/Instance Settings ---
+
+def get_trending_key() -> str | None:
+    """Get the trending API key from config."""
+    try:
+        item = _get_client().get_item({
+            'media_type': 'CONFIG',
+            'tmdb_id': 0  # Dummy sort key for config items
+        })
+        if item:
+            return item.get('trending_key')
+        return None
+    except Exception as e:
+        print(f"Error getting trending key: {e}", flush=True)
+        return None
+
+
+def set_trending_key(key: str) -> bool:
+    """Set or update the trending API key."""
+    try:
+        _get_client().put_item({
+            'media_type': 'CONFIG',
+            'tmdb_id': 0,
+            'trending_key': key,
+            'created_at': datetime.now(timezone.utc).isoformat()
+        })
+        return True
+    except Exception as e:
+        print(f"Error setting trending key: {e}", flush=True)
+        return False
+
+
+def get_or_create_trending_key() -> str:
+    """Get existing trending key or create a new one."""
+    import secrets as sec
+    key = get_trending_key()
+    if not key:
+        key = sec.token_urlsafe(32)
+        set_trending_key(key)
+        print(f"DEBUG: Generated new trending key", flush=True)
+    return key
+
+
+# --- Library Status (for cached frontend hydration) ---
+
+def get_all_library_tmdb_ids() -> dict[str, list[int]]:
+    """
+    Get all TMDB IDs in library, grouped by media type.
+    Returns: {"movie": [id1, id2, ...], "tv": [id1, id2, ...]}
+    """
+    try:
+        client = _get_client()
+        result = {"movie": [], "tv": []}
+
+        for media_type in ['movie', 'tv']:
+            library_key = f'LIBRARY#{media_type}'
+            items = client.query(
+                key_condition_expression='media_type = :mt',
+                expression_attribute_values={':mt': library_key}
+            )
+            result[media_type] = [item['tmdb_id'] for item in items]
+
+        return result
+    except Exception as e:
+        print(f"Error getting library tmdb ids: {e}", flush=True)
+        return {"movie": [], "tv": []}
