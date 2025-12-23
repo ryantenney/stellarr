@@ -14,7 +14,8 @@ from database import (
     init_db, add_request, remove_request, get_all_requests, is_requested,
     mark_as_added, find_by_tvdb_id, find_by_plex_guid, update_plex_guid,
     sync_library, is_in_library, get_plex_guid_cache, set_plex_guid_cache,
-    get_trending_key, get_or_create_trending_key, get_all_library_tmdb_ids
+    get_trending_key, get_or_create_trending_key, get_all_library_tmdb_ids,
+    find_by_title
 )
 import json
 from tmdb import tmdb_client
@@ -659,6 +660,29 @@ async def plex_webhook(
                 else:
                     # Cache just the TVDB ID - future lookups can use this
                     await set_plex_guid_cache(media.plex_guid, None, show_tvdb_id_resolved)
+
+    # 5. Try title-based matching as fallback (for unmatched Plex imports)
+    # Only attempt if we still haven't matched and have no TMDB/TVDB IDs
+    if not matched and not show_tmdb_id and not show_tvdb_id:
+        print(f"WEBHOOK: No IDs available, attempting title match for '{media.title}'")
+        matched_request = await find_by_title(media.title, media.media_type, media.year)
+        if matched_request:
+            matched = await mark_as_added(matched_request['tmdb_id'], media.media_type)
+            if matched:
+                print(f"WEBHOOK: Matched request by title '{media.title}' -> TMDB {matched_request['tmdb_id']}")
+                # Add to library using the request's TMDB ID
+                await sync_library(
+                    [{"tmdb_id": matched_request['tmdb_id'], "tvdb_id": matched_request.get('tvdb_id'), "title": media.title}],
+                    media.media_type,
+                    clear_first=False
+                )
+                added_to_library = True
+                # Cache plex_guid for future lookups
+                if media.plex_guid:
+                    await update_plex_guid(matched_request['tmdb_id'], media.media_type, media.plex_guid)
+                    await set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], matched_request.get('tvdb_id'))
+        else:
+            print(f"WEBHOOK: Title match failed - no unique match found")
 
     # Use resolved show-level TMDB ID in result (or original if show/movie)
     result_tmdb_id = show_tmdb_id if show_tmdb_id else media.tmdb_id

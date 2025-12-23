@@ -364,6 +364,45 @@ async def get_or_create_trending_key() -> str:
     return key
 
 
+# --- Title-based matching for unmatched Plex imports ---
+
+async def find_by_title(title: str, media_type: str, year: int | None = None) -> dict | None:
+    """
+    Find a pending request by title (case-insensitive exact match).
+    If year is provided, also match on year.
+    Returns None if no match or multiple matches (ambiguous).
+    """
+    async with aiosqlite.connect(settings.database_path) as db:
+        db.row_factory = aiosqlite.Row
+        # Get pending requests (no added_at) of the given media type
+        cursor = await db.execute(
+            "SELECT * FROM requests WHERE media_type = ? AND added_at IS NULL",
+            (media_type,)
+        )
+        rows = await cursor.fetchall()
+
+        # Normalize and match title
+        title_lower = title.lower().strip()
+        matches = []
+
+        for row in rows:
+            item = dict(row)
+            item_title = (item.get('title') or '').lower().strip()
+            if item_title == title_lower:
+                # If year provided, check it matches (or item has no year)
+                if year is not None:
+                    item_year = item.get('year')
+                    if item_year is not None and item_year != year:
+                        continue
+                matches.append(item)
+
+        # Only return if exactly one match (no ambiguity)
+        if len(matches) == 1:
+            return matches[0]
+
+        return None
+
+
 # --- Library Status (for cached frontend hydration) ---
 
 async def get_all_library_tmdb_ids() -> dict[str, list[int]]:

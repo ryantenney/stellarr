@@ -491,6 +491,49 @@ def get_or_create_trending_key() -> str:
     return key
 
 
+# --- Title-based matching for unmatched Plex imports ---
+
+def find_by_title(title: str, media_type: str, year: int | None = None) -> dict | None:
+    """
+    Find a pending request by title (case-insensitive exact match).
+    If year is provided, also match on year.
+    Returns None if no match or multiple matches (ambiguous).
+    """
+    try:
+        client = _get_client()
+        # Query by media_type partition key
+        items = client.query(
+            key_condition_expression='media_type = :mt',
+            expression_attribute_values={':mt': media_type}
+        )
+
+        # Filter to pending requests only (no added_at)
+        pending = [item for item in items if not item.get('added_at')]
+
+        # Normalize and match title
+        title_lower = title.lower().strip()
+        matches = []
+
+        for item in pending:
+            item_title = (item.get('title') or '').lower().strip()
+            if item_title == title_lower:
+                # If year provided, check it matches (or item has no year)
+                if year is not None:
+                    item_year = item.get('year')
+                    if item_year is not None and item_year != year:
+                        continue
+                matches.append(item)
+
+        # Only return if exactly one match (no ambiguity)
+        if len(matches) == 1:
+            return matches[0]
+
+        return None
+    except Exception as e:
+        print(f"Error finding by title: {e}", flush=True)
+        return None
+
+
 # --- Library Status (for cached frontend hydration) ---
 
 def get_all_library_tmdb_ids() -> dict[str, list[int]]:
