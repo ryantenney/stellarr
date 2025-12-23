@@ -1,11 +1,14 @@
 <script>
 	import { onMount } from 'svelte';
-	import { authenticated, logout, toasts, addToast, updateLibraryStatus } from '$lib/stores.js';
-	import { preloadAuthParams, getFeedInfo, getLibraryStatus } from '$lib/api.js';
+	import { authenticated, logout, toasts, addToast, updateLibraryStatus, pushSubscribed, pushSupported, pushPermission, checkPushPermission } from '$lib/stores.js';
+	import { preloadAuthParams, getFeedInfo, getLibraryStatus, getVapidPublicKey, subscribePush, unsubscribePush, getPushStatus } from '$lib/api.js';
+
+	const appName = import.meta.env.VITE_APP_NAME || 'Overseer';
 
 	let showFeedModal = false;
 	let feedInfo = null;
 	let loadingFeeds = false;
+	let pushLoading = false;
 
 	onMount(() => {
 		// Preload auth params on page load to warm up Lambda
@@ -14,8 +17,130 @@
 		// If authenticated, fetch library status in background
 		if ($authenticated) {
 			refreshLibraryStatus();
+			registerServiceWorker();
+			checkPushState();
 		}
 	});
+
+	// Register service worker for push notifications
+	async function registerServiceWorker() {
+		if (!$pushSupported) return;
+
+		try {
+			const registration = await navigator.serviceWorker.register('/sw.js');
+			console.log('Service worker registered:', registration.scope);
+		} catch (error) {
+			console.error('Service worker registration failed:', error);
+		}
+	}
+
+	// Check if user has push subscription on the server
+	async function checkPushState() {
+		if (!$pushSupported) return;
+
+		try {
+			const status = await getPushStatus();
+			pushSubscribed.set(status.subscribed);
+		} catch (error) {
+			console.error('Failed to check push status:', error);
+		}
+	}
+
+	// Toggle push notifications
+	async function togglePush() {
+		if (pushLoading) return;
+		pushLoading = true;
+
+		try {
+			if ($pushSubscribed) {
+				// Unsubscribe
+				await unsubscribePush();
+				pushSubscribed.set(false);
+				addToast('Notifications disabled', 'info');
+			} else {
+				// Subscribe
+				await enablePush();
+			}
+		} catch (error) {
+			console.error('Push toggle failed:', error);
+			addToast('Failed to update notification settings', 'error');
+		} finally {
+			pushLoading = false;
+		}
+	}
+
+	// Enable push notifications
+	async function enablePush() {
+		// Request permission if needed
+		if (Notification.permission === 'default') {
+			const permission = await Notification.requestPermission();
+			checkPushPermission();
+			if (permission !== 'granted') {
+				addToast('Notification permission denied', 'error');
+				return;
+			}
+		} else if (Notification.permission === 'denied') {
+			addToast('Notifications are blocked. Enable in browser settings.', 'error');
+			return;
+		}
+
+		// Get service worker registration
+		const registration = await navigator.serviceWorker.ready;
+
+		// Get VAPID public key from server
+		const { public_key } = await getVapidPublicKey();
+
+		// Convert base64 to Uint8Array
+		const vapidKey = urlBase64ToUint8Array(public_key);
+
+		// Subscribe to push
+		const subscription = await registration.pushManager.subscribe({
+			userVisibleOnly: true,
+			applicationServerKey: vapidKey
+		});
+
+		// Get keys from subscription
+		const keys = {
+			p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
+			auth: arrayBufferToBase64(subscription.getKey('auth'))
+		};
+
+		// Send to server
+		await subscribePush({
+			endpoint: subscription.endpoint,
+			keys: keys
+		});
+
+		pushSubscribed.set(true);
+		addToast('Notifications enabled!', 'success');
+	}
+
+	// Helper: Convert URL-safe base64 to Uint8Array
+	function urlBase64ToUint8Array(base64String) {
+		const padding = '='.repeat((4 - base64String.length % 4) % 4);
+		const base64 = (base64String + padding)
+			.replace(/-/g, '+')
+			.replace(/_/g, '/');
+		const rawData = window.atob(base64);
+		const outputArray = new Uint8Array(rawData.length);
+		for (let i = 0; i < rawData.length; ++i) {
+			outputArray[i] = rawData.charCodeAt(i);
+		}
+		return outputArray;
+	}
+
+	// Helper: Convert ArrayBuffer to base64
+	function arrayBufferToBase64(buffer) {
+		const bytes = new Uint8Array(buffer);
+		let binary = '';
+		for (let i = 0; i < bytes.byteLength; i++) {
+			binary += String.fromCharCode(bytes[i]);
+		}
+		return window.btoa(binary)
+			.replace(/\+/g, '-')
+			.replace(/\//g, '_')
+			.replace(/=+$/, '');
+	}
 
 	// Fetch library status and update store
 	async function refreshLibraryStatus() {
@@ -118,17 +243,67 @@
 	<header>
 		<div class="header-content">
 			<a href="/" class="logo">
-				<span class="logo-icon">🎬</span>
-				<span class="logo-text">Overseer Lite</span>
+				<svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<rect x="2" y="2" width="20" height="20" rx="2" />
+					<path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5" />
+				</svg>
+				<span class="logo-text">{appName}</span>
 			</a>
 			{#if $authenticated}
 				<nav>
-					<a href="/">Search</a>
-					<a href="/requests">Requests</a>
-					<button class="nav-btn desktop-only" on:click={openFeedModal}>Feeds</button>
-					<button class="logout-btn" on:click={logout} title="Logout">
-						<span class="logout-text">Logout</span>
-						<span class="logout-icon">⏻</span>
+					<a href="/" class="nav-link" title="Search">
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="11" cy="11" r="8" />
+							<path d="M21 21l-4.35-4.35" />
+						</svg>
+						<span class="nav-text">Search</span>
+					</a>
+					<a href="/requests" class="nav-link" title="Requests">
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+							<rect x="9" y="3" width="6" height="4" rx="1" />
+							<path d="M9 12h6M9 16h6" />
+						</svg>
+						<span class="nav-text">Requests</span>
+					</a>
+					<button class="nav-btn feeds-btn" on:click={openFeedModal} title="Feed URLs">
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M4 11a9 9 0 0 1 9 9" />
+							<path d="M4 4a16 16 0 0 1 16 16" />
+							<circle cx="5" cy="19" r="1" fill="currentColor" />
+						</svg>
+					</button>
+					{#if $pushSupported}
+						<button
+							class="nav-btn"
+							class:subscribed={$pushSubscribed}
+							class:loading={pushLoading}
+							on:click={togglePush}
+							title={$pushSubscribed ? 'Disable notifications' : 'Enable notifications'}
+						>
+							{#if pushLoading}
+								<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+									<path d="M13.73 21a2 2 0 0 1-3.46 0" />
+								</svg>
+							{:else if $pushSubscribed}
+								<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+									<path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+								</svg>
+							{:else}
+								<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+									<path d="M13.73 21a2 2 0 0 1-3.46 0" />
+								</svg>
+							{/if}
+						</button>
+					{/if}
+					<button class="nav-btn logout-btn" on:click={logout} title="Logout">
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+							<polyline points="16,17 21,12 16,7" />
+							<line x1="21" y1="12" x2="9" y2="12" />
+						</svg>
 					</button>
 				</nav>
 			{/if}
@@ -168,52 +343,25 @@
 
 						<div class="feed-section">
 							<h3>Radarr (Movies)</h3>
-							<div class="feed-item recommended">
+							<div class="feed-item">
 								<div class="feed-info">
 									<strong>{feedInfo.feeds.radarr.name}</strong>
-									<span class="badge">Recommended</span>
 									<p>{feedInfo.feeds.radarr.description}</p>
 									<code>{feedInfo.feeds.radarr.setup}</code>
 								</div>
 								<button on:click={() => copyUrl(feedInfo.feeds.radarr.url)}>Copy URL</button>
 							</div>
-							<div class="feed-item">
-								<div class="feed-info">
-									<strong>{feedInfo.feeds.radarr_rss.name}</strong>
-									<p>{feedInfo.feeds.radarr_rss.description}</p>
-								</div>
-								<button on:click={() => copyUrl(feedInfo.feeds.radarr_rss.url)}>Copy URL</button>
-							</div>
 						</div>
 
 						<div class="feed-section">
 							<h3>Sonarr (TV Shows)</h3>
-							<div class="feed-item recommended">
+							<div class="feed-item">
 								<div class="feed-info">
 									<strong>{feedInfo.feeds.sonarr.name}</strong>
-									<span class="badge">Recommended</span>
 									<p>{feedInfo.feeds.sonarr.description}</p>
 									<code>{feedInfo.feeds.sonarr.setup}</code>
 								</div>
 								<button on:click={() => copyUrl(feedInfo.feeds.sonarr.url)}>Copy URL</button>
-							</div>
-							<div class="feed-item">
-								<div class="feed-info">
-									<strong>{feedInfo.feeds.tv_rss.name}</strong>
-									<p>{feedInfo.feeds.tv_rss.description}</p>
-								</div>
-								<button on:click={() => copyUrl(feedInfo.feeds.tv_rss.url)}>Copy URL</button>
-							</div>
-						</div>
-
-						<div class="feed-section">
-							<h3>Combined</h3>
-							<div class="feed-item">
-								<div class="feed-info">
-									<strong>{feedInfo.feeds.all_rss.name}</strong>
-									<p>{feedInfo.feeds.all_rss.description}</p>
-								</div>
-								<button on:click={() => copyUrl(feedInfo.feeds.all_rss.url)}>Copy URL</button>
 							</div>
 						</div>
 					{:else}
@@ -258,7 +406,8 @@
 	}
 
 	.logo-icon {
-		font-size: 1.5rem;
+		width: 1.5rem;
+		height: 1.5rem;
 	}
 
 	.logo-text {
@@ -268,54 +417,66 @@
 
 	nav {
 		display: flex;
-		gap: 1.5rem;
+		gap: 1rem;
 		align-items: center;
 	}
 
-	nav a {
+	.nav-link {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		color: var(--text-secondary);
 		text-decoration: none;
 		transition: color 0.2s;
 	}
 
-	nav a:hover,
-	nav a:active {
+	.nav-link:hover,
+	.nav-link:active {
 		color: var(--text-primary);
 	}
 
+	.nav-icon {
+		width: 1.25rem;
+		height: 1.25rem;
+		flex-shrink: 0;
+	}
+
+	.nav-text {
+		display: inline;
+	}
+
 	.nav-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		background: transparent;
 		border: none;
 		color: var(--text-secondary);
 		cursor: pointer;
-		font-size: inherit;
-		padding: 0;
-		transition: color 0.2s;
+		padding: 0.5rem;
+		border-radius: 0.5rem;
+		transition: color 0.2s, background 0.2s;
 	}
 
 	.nav-btn:hover,
 	.nav-btn:active {
 		color: var(--text-primary);
+		background: var(--bg-tertiary);
 	}
 
-	.logout-btn {
-		background: transparent;
-		border: 1px solid var(--border);
-		color: var(--text-secondary);
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		transition: all 0.2s;
+	.nav-btn.subscribed .bell-icon {
+		color: var(--accent);
+	}
+
+	.nav-btn.loading {
+		opacity: 0.5;
+		pointer-events: none;
 	}
 
 	.logout-btn:hover,
 	.logout-btn:active {
-		border-color: var(--error);
 		color: var(--error);
-	}
-
-	.logout-icon {
-		display: none;
+		background: rgba(239, 68, 68, 0.1);
 	}
 
 	main {
@@ -367,36 +528,31 @@
 		}
 	}
 
-	.desktop-only {
-		display: inline;
-	}
-
 	@media (max-width: 768px) {
 		header {
 			padding: 0.75rem 1rem;
 		}
 
 		nav {
-			gap: 0.75rem;
+			gap: 0.5rem;
 		}
 
-		.desktop-only {
+		.nav-text {
 			display: none;
 		}
 
-		.logout-btn {
-			padding: 0.4rem 0.5rem;
-			border: none;
-			background: none;
+		.nav-link {
+			padding: 0.5rem;
+			border-radius: 0.5rem;
 		}
 
-		.logout-text {
+		.nav-link:hover,
+		.nav-link:active {
+			background: var(--bg-tertiary);
+		}
+
+		.feeds-btn {
 			display: none;
-		}
-
-		.logout-icon {
-			display: inline;
-			font-size: 1.1rem;
 		}
 
 		main {

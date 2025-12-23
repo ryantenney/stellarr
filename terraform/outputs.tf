@@ -42,3 +42,8 @@ output "cache_warmer_function_name" {
   description = "Lambda function name for cache warmer"
   value       = aws_lambda_function.cache_warmer.function_name
 }
+
+output "app_name" {
+  description = "Application name for frontend"
+  value       = var.app_name
+}

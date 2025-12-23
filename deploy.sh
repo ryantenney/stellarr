@@ -99,6 +99,7 @@ get_tf_outputs() {
     LAMBDA_BUCKET=$(terraform output -raw lambda_deployment_bucket 2>/dev/null) || true
     CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null) || true
     CACHE_WARMER_FUNCTION=$(terraform output -raw cache_warmer_function_name 2>/dev/null) || true
+    APP_NAME=$(terraform output -raw app_name 2>/dev/null) || APP_NAME="Overseer"
 
     cd "$SCRIPT_DIR"
 
@@ -172,7 +173,7 @@ deploy_frontend() {
     npm ci
 
     echo "Building frontend..."
-    npm run build
+    VITE_APP_NAME="$APP_NAME" npm run build
 
     echo "Uploading to S3..."
     aws s3 sync build/ "s3://$FRONTEND_BUCKET" --delete

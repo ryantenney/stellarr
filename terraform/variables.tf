@@ -117,3 +117,9 @@ variable "rate_limit_window_seconds" {
   type        = number
   default     = 900  # 15 minutes
 }
+
+variable "app_name" {
+  description = "Application name displayed in the header"
+  type        = string
+  default     = "Overseer"
+}
