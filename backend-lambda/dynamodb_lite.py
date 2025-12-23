@@ -241,3 +241,87 @@ class DynamoDBClient:
         if return_values != 'NONE' and 'Attributes' in response:
             return self._unmarshal_item(response['Attributes'])
         return None
+
+    def batch_delete(self, keys: list[dict]) -> int:
+        """
+        Delete multiple items in batches of 25.
+        Returns the number of items deleted.
+        """
+        if not keys:
+            return 0
+
+        deleted = 0
+        # DynamoDB BatchWriteItem supports max 25 items per request
+        for i in range(0, len(keys), 25):
+            batch = keys[i:i + 25]
+            request_items = {
+                self.table_name: [
+                    {'DeleteRequest': {'Key': self._marshal_key(key)}}
+                    for key in batch
+                ]
+            }
+
+            response = self._request('BatchWriteItem', {
+                'RequestItems': request_items
+            })
+
+            # Handle unprocessed items (throttling)
+            unprocessed = response.get('UnprocessedItems', {}).get(self.table_name, [])
+            deleted += len(batch) - len(unprocessed)
+
+            # Retry unprocessed items (simple retry, no backoff for now)
+            while unprocessed:
+                response = self._request('BatchWriteItem', {
+                    'RequestItems': {self.table_name: unprocessed}
+                })
+                processed = len(unprocessed) - len(response.get('UnprocessedItems', {}).get(self.table_name, []))
+                deleted += processed
+                unprocessed = response.get('UnprocessedItems', {}).get(self.table_name, [])
+
+        return deleted
+
+    def batch_put(self, items: list[dict]) -> int:
+        """
+        Put multiple items in batches of 25.
+        Returns the number of items written.
+        """
+        if not items:
+            return 0
+
+        written = 0
+        # DynamoDB BatchWriteItem supports max 25 items per request
+        for i in range(0, len(items), 25):
+            batch = items[i:i + 25]
+            request_items = {
+                self.table_name: [
+                    {'PutRequest': {'Item': self._marshal_item(item)}}
+                    for item in batch
+                ]
+            }
+
+            response = self._request('BatchWriteItem', {
+                'RequestItems': request_items
+            })
+
+            # Handle unprocessed items (throttling)
+            unprocessed = response.get('UnprocessedItems', {}).get(self.table_name, [])
+            written += len(batch) - len(unprocessed)
+
+            # Retry unprocessed items with exponential backoff
+            retry_count = 0
+            while unprocessed and retry_count < 5:
+                retry_count += 1
+                import time
+                time.sleep(0.1 * (2 ** retry_count))  # Exponential backoff
+
+                response = self._request('BatchWriteItem', {
+                    'RequestItems': {self.table_name: unprocessed}
+                })
+                new_unprocessed = response.get('UnprocessedItems', {}).get(self.table_name, [])
+                written += len(unprocessed) - len(new_unprocessed)
+                unprocessed = new_unprocessed
+
+            if unprocessed:
+                print(f"Warning: {len(unprocessed)} items still unprocessed after retries", flush=True)
+
+        return written

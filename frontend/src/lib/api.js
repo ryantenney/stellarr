@@ -132,7 +132,9 @@ export async function getTrending(mediaType = 'all') {
 	// Trending endpoint is now public but requires the trending key
 	const key = getTrendingKey();
 	if (!key) {
-		throw new Error('Trending key not available - fetch library status first');
+		// Return empty results if no key available yet
+		// (library-status will populate the key, then caller can retry)
+		return { results: [] };
 	}
 
 	// Direct fetch without auth header (public endpoint)

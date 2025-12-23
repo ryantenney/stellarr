@@ -14,6 +14,12 @@ Usage:
     python plex-sync.py --plex-url http://localhost:32400 --plex-token YOUR_PLEX_TOKEN \
         --overseer-url https://overseer.example.com --sync-token YOUR_SYNC_TOKEN
 
+    # Sync only specific libraries
+    python plex-sync.py ... -l Movies -l "TV Shows"
+
+    # List available library names
+    python plex-sync.py --plex-token YOUR_TOKEN --list-libraries
+
 Or via environment variables:
     export PLEX_URL=http://localhost:32400
     export PLEX_TOKEN=your_plex_token
@@ -44,23 +50,36 @@ except ImportError:
     sys.exit(1)
 
 
-def get_library_items(plex: PlexServer, library_type: str, verbose: bool = False) -> list[dict]:
+def get_library_items(
+    plex: PlexServer,
+    library_type: str,
+    library_names: list[str] | None = None,
+    verbose: bool = False
+) -> list[dict]:
     """
     Extract TMDB/TVDB IDs from Plex library.
 
     Args:
         plex: PlexServer instance
         library_type: "movie" or "tv"
+        library_names: Optional list of library names to include (None = all)
         verbose: Print progress information
 
     Returns:
-        List of dicts with tmdb_id, tvdb_id, and title
+        List of dicts with tmdb_id, tvdb_id, and title (deduplicated by tmdb_id)
     """
+    seen_ids = set()
     items = []
     section_type = "movie" if library_type == "movie" else "show"
 
     for section in plex.library.sections():
         if section.type != section_type:
+            continue
+
+        # Filter by library name if specified
+        if library_names and section.title not in library_names:
+            if verbose:
+                print(f"  Skipping library section: {section.title} (not in filter)")
             continue
 
         if verbose:
@@ -84,16 +103,76 @@ def get_library_items(plex: PlexServer, library_type: str, verbose: bool = False
                         pass
 
             # Only include items with TMDB ID (required for matching)
-            if tmdb_id:
+            # Deduplicate by tmdb_id (same item may exist in multiple libraries)
+            if tmdb_id and tmdb_id not in seen_ids:
+                seen_ids.add(tmdb_id)
                 items.append({
                     "tmdb_id": tmdb_id,
                     "tvdb_id": tvdb_id,
                     "title": item.title
                 })
+            elif tmdb_id and verbose:
+                print(f"    Skipping duplicate '{item.title}' (TMDB: {tmdb_id})")
             elif verbose:
                 print(f"    Skipping '{item.title}' - no TMDB ID found")
 
     return items
+
+
+def clear_library(
+    media_type: str,
+    overseer_url: str,
+    sync_token: str,
+    max_retries: int = 3,
+    verbose: bool = False
+) -> bool:
+    """
+    Clear existing library items for a media type.
+
+    Args:
+        media_type: "movie" or "tv"
+        overseer_url: Base URL of Overseer instance
+        sync_token: Plex webhook token for authentication
+        max_retries: Number of retry attempts on failure
+        verbose: Print progress information
+
+    Returns:
+        True if successful, False otherwise
+    """
+    url = f"{overseer_url.rstrip('/')}/sync/library"
+    params = {
+        "media_type": media_type,
+        "token": sync_token,
+        "clear": "true"
+    }
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            if verbose:
+                print(f"    Clearing existing {media_type} library (attempt {attempt}/{max_retries})...")
+
+            response = requests.post(
+                url,
+                params=params,
+                json=[],  # Empty body - just clear
+                timeout=60  # Longer timeout for clear operation
+            )
+            response.raise_for_status()
+
+            if verbose:
+                result = response.json()
+                print(f"    Cleared library successfully")
+            return True
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries:
+                if verbose:
+                    print(f"    Clear failed: {e}, retrying...")
+            else:
+                print(f"    Clear failed after {max_retries} attempts: {e}")
+                return False
+
+    return False
 
 
 def sync_to_overseer(
@@ -102,6 +181,7 @@ def sync_to_overseer(
     overseer_url: str,
     sync_token: str,
     batch_size: int = 100,
+    clear_first: bool = True,
     verbose: bool = False
 ) -> dict:
     """
@@ -113,6 +193,7 @@ def sync_to_overseer(
         overseer_url: Base URL of Overseer instance
         sync_token: Plex webhook token for authentication
         batch_size: Number of items per request
+        clear_first: Whether to clear existing items before syncing
         verbose: Print progress information
 
     Returns:
@@ -124,6 +205,11 @@ def sync_to_overseer(
         "token": sync_token
     }
 
+    # Clear existing items first (separate call with retries)
+    if clear_first:
+        if not clear_library(media_type, overseer_url, sync_token, verbose=verbose):
+            raise requests.exceptions.RequestException("Failed to clear library")
+
     total_synced = 0
     total_marked = 0
 
@@ -132,19 +218,13 @@ def sync_to_overseer(
         batch = items[i:i + batch_size]
         batch_num = (i // batch_size) + 1
         total_batches = (len(items) + batch_size - 1) // batch_size
-        is_first_batch = (i == 0)
 
         if verbose:
             print(f"    Sending batch {batch_num}/{total_batches} ({len(batch)} items)...")
 
-        # Clear existing items only on first batch
-        batch_params = params.copy()
-        if is_first_batch:
-            batch_params["clear"] = "true"
-
         response = requests.post(
             url,
-            params=batch_params,
+            params=params,
             json=batch,
             timeout=30
         )
@@ -189,6 +269,13 @@ def main():
         help="Overseer sync token - same as PLEX_WEBHOOK_TOKEN (or OVERSEER_SYNC_TOKEN env var)"
     )
     parser.add_argument(
+        "--library", "-l",
+        action="append",
+        dest="libraries",
+        metavar="NAME",
+        help="Only sync specific library by name (can be repeated, e.g., -l Movies -l 'TV Shows')"
+    )
+    parser.add_argument(
         "--movies-only",
         action="store_true",
         help="Only sync movies, skip TV shows"
@@ -214,6 +301,16 @@ def main():
         action="store_true",
         help="Show what would be synced without actually syncing"
     )
+    parser.add_argument(
+        "--no-clear",
+        action="store_true",
+        help="Don't clear existing library items before syncing (additive sync)"
+    )
+    parser.add_argument(
+        "--list-libraries",
+        action="store_true",
+        help="List all Plex library sections and exit"
+    )
 
     args = parser.parse_args()
 
@@ -222,13 +319,15 @@ def main():
         print("Error: Plex token is required. Use --plex-token or set PLEX_TOKEN env var.")
         sys.exit(1)
 
-    if not args.overseer_url:
-        print("Error: Overseer URL is required. Use --overseer-url or set OVERSEER_URL env var.")
-        sys.exit(1)
+    # Overseer URL/token only required if not just listing libraries
+    if not args.list_libraries:
+        if not args.overseer_url:
+            print("Error: Overseer URL is required. Use --overseer-url or set OVERSEER_URL env var.")
+            sys.exit(1)
 
-    if not args.sync_token:
-        print("Error: Sync token is required. Use --sync-token or set OVERSEER_SYNC_TOKEN env var.")
-        sys.exit(1)
+        if not args.sync_token:
+            print("Error: Sync token is required. Use --sync-token or set OVERSEER_SYNC_TOKEN env var.")
+            sys.exit(1)
 
     if args.movies_only and args.tv_only:
         print("Error: Cannot specify both --movies-only and --tv-only")
@@ -243,15 +342,25 @@ def main():
         print(f"Error connecting to Plex: {e}")
         sys.exit(1)
 
+    # List libraries and exit if requested
+    if args.list_libraries:
+        print("\nLibrary sections:")
+        for section in plex.library.sections():
+            item_count = len(section.all())
+            print(f"  - {section.title} ({section.type}, {item_count} items)")
+        sys.exit(0)
+
     # Sync movies
     if not args.tv_only:
         print("\nScanning movie libraries...")
-        movies = get_library_items(plex, "movie", args.verbose)
+        movies = get_library_items(plex, "movie", args.libraries, args.verbose)
         print(f"Found {len(movies)} movies with TMDB IDs")
 
-        if args.dry_run:
+        if not movies:
+            print("No movies found - skipping movie sync")
+        elif args.dry_run:
             print("(Dry run - not syncing)")
-            if args.verbose and movies:
+            if args.verbose:
                 print("Sample items:")
                 for item in movies[:5]:
                     print(f"  - {item['title']} (TMDB: {item['tmdb_id']})")
@@ -260,7 +369,8 @@ def main():
             try:
                 result = sync_to_overseer(
                     movies, "movie", args.overseer_url, args.sync_token,
-                    batch_size=args.batch_size, verbose=args.verbose
+                    batch_size=args.batch_size, clear_first=not args.no_clear,
+                    verbose=args.verbose
                 )
                 print(f"Synced {result.get('synced', 0)} movies")
                 if result.get('marked_as_added', 0) > 0:
@@ -271,12 +381,14 @@ def main():
     # Sync TV shows
     if not args.movies_only:
         print("\nScanning TV show libraries...")
-        shows = get_library_items(plex, "tv", args.verbose)
+        shows = get_library_items(plex, "tv", args.libraries, args.verbose)
         print(f"Found {len(shows)} TV shows with TMDB IDs")
 
-        if args.dry_run:
+        if not shows:
+            print("No TV shows found - skipping TV sync")
+        elif args.dry_run:
             print("(Dry run - not syncing)")
-            if args.verbose and shows:
+            if args.verbose:
                 print("Sample items:")
                 for item in shows[:5]:
                     print(f"  - {item['title']} (TMDB: {item['tmdb_id']}, TVDB: {item.get('tvdb_id', 'N/A')})")
@@ -285,7 +397,8 @@ def main():
             try:
                 result = sync_to_overseer(
                     shows, "tv", args.overseer_url, args.sync_token,
-                    batch_size=args.batch_size, verbose=args.verbose
+                    batch_size=args.batch_size, clear_first=not args.no_clear,
+                    verbose=args.verbose
                 )
                 print(f"Synced {result.get('synced', 0)} TV shows")
                 if result.get('marked_as_added', 0) > 0:

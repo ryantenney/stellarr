@@ -323,20 +323,23 @@ def sync_library(items: list[dict], media_type: str, clear_first: bool = False) 
         client = _get_client()
         library_key = f'LIBRARY#{media_type}'
 
-        # Optionally clear existing library items first
+        # Optionally clear existing library items first (using batch delete for speed)
         if clear_first:
             existing = client.query(
                 key_condition_expression='media_type = :mt',
                 expression_attribute_values={':mt': library_key}
             )
-            for item in existing:
-                client.delete_item({
-                    'media_type': library_key,
-                    'tmdb_id': item['tmdb_id']
-                })
+            if existing:
+                keys_to_delete = [
+                    {'media_type': library_key, 'tmdb_id': item['tmdb_id']}
+                    for item in existing
+                ]
+                deleted = client.batch_delete(keys_to_delete)
+                print(f"SYNC: Cleared {deleted} existing library items", flush=True)
 
-        # Insert/update items
+        # Build items for batch insert
         synced_at = datetime.now(timezone.utc).isoformat()
+        lib_items = []
         for item in items:
             lib_item = {
                 'media_type': library_key,
@@ -347,9 +350,11 @@ def sync_library(items: list[dict], media_type: str, clear_first: bool = False) 
                 lib_item['tvdb_id'] = item['tvdb_id']
             if item.get('title'):
                 lib_item['title'] = item['title']
-            client.put_item(lib_item)
+            lib_items.append(lib_item)
 
-        return len(items)
+        # Batch write all items
+        written = client.batch_put(lib_items)
+        return written
     except Exception as e:
         print(f"Error syncing library: {e}", flush=True)
         return 0
@@ -493,9 +498,23 @@ def get_or_create_trending_key() -> str:
 
 # --- Title-based matching for unmatched Plex imports ---
 
+import re
+
+def _normalize_title(title: str) -> str:
+    """Normalize a title for matching: lowercase, strip non-alphanumeric, collapse spaces."""
+    # Lowercase and strip
+    title = title.lower().strip()
+    # Replace non-alphanumeric (except spaces) with nothing
+    title = re.sub(r'[^a-z0-9\s]', '', title)
+    # Collapse multiple spaces into one
+    title = re.sub(r'\s+', ' ', title)
+    return title.strip()
+
+
 def find_by_title(title: str, media_type: str, year: int | None = None) -> dict | None:
     """
-    Find a pending request by title (case-insensitive exact match).
+    Find a pending request by title (normalized match).
+    Normalization: lowercase, strip punctuation/special chars, collapse spaces.
     If year is provided, also match on year.
     Returns None if no match or multiple matches (ambiguous).
     """
@@ -511,12 +530,12 @@ def find_by_title(title: str, media_type: str, year: int | None = None) -> dict 
         pending = [item for item in items if not item.get('added_at')]
 
         # Normalize and match title
-        title_lower = title.lower().strip()
+        normalized_title = _normalize_title(title)
         matches = []
 
         for item in pending:
-            item_title = (item.get('title') or '').lower().strip()
-            if item_title == title_lower:
+            item_title = _normalize_title(item.get('title') or '')
+            if item_title == normalized_title:
                 # If year provided, check it matches (or item has no year)
                 if year is not None:
                     item_year = item.get('year')

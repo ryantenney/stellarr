@@ -7,6 +7,7 @@
 		setAuthenticated,
 		librarySet,
 		requestsMap,
+		libraryStatus,
 		updateLibraryStatus,
 		addToRequestsOptimistic
 	} from '$lib/stores.js';
@@ -19,7 +20,7 @@
 	let trendingResults = [];
 	let mediaFilter = 'all';
 	let searchTimeout = null;
-	let libraryStatusLoaded = false;
+	let trendingLoaded = false;
 
 	// Pagination - target ~20-24 items per page
 	let currentPage = 1;
@@ -44,13 +45,11 @@
 
 	let resizeObserver;
 
-	// Handle PWA returning to foreground - warm up Lambda and refresh data
+	// Handle PWA returning to foreground - warm up Lambda
 	function handleVisibilityChange() {
 		if (document.visibilityState === 'visible' && $authenticated) {
 			// Warm up Lambda in background (don't await)
 			warmup();
-			// Refresh library status
-			refreshLibraryStatus();
 		}
 	}
 
@@ -59,22 +58,14 @@
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		if ($authenticated) {
-			// Load library status first (contains trending key needed for trending fetch)
-			await refreshLibraryStatus();
+			// Load trending (uses cached key from localStorage if available)
 			await loadTrending();
 		}
 	});
 
-	async function refreshLibraryStatus() {
-		try {
-			const data = await getLibraryStatus();
-			updateLibraryStatus(data);
-			libraryStatusLoaded = true;
-		} catch (error) {
-			console.error('Failed to load library status:', error);
-			// Still allow trending if we have a cached key
-			libraryStatusLoaded = true;
-		}
+	// Reactively load trending when trendingKey becomes available (from layout's library-status fetch)
+	$: if ($authenticated && $libraryStatus.trendingKey && !trendingLoaded && trendingResults.length === 0) {
+		loadTrending();
 	}
 
 	// Hydrate a single item with library/request status from stores
@@ -119,8 +110,9 @@
 			const response = await verifyPassword(password, userName.trim());
 			setAuthenticated(response.token, response.name);
 			addToast(`Welcome, ${response.name}!`, 'success');
-			// Fetch library status first (gets trending key)
-			await refreshLibraryStatus();
+			// Fetch library status (gets trending key), then load trending
+			const statusData = await getLibraryStatus();
+			updateLibraryStatus(statusData);
 			await loadTrending();
 		} catch (error) {
 			addToast(error.message || 'Invalid credentials', 'error');
@@ -134,6 +126,9 @@
 			const data = await getTrending(mediaFilter === 'all' ? 'all' : mediaFilter);
 			// Store raw results - hydration happens reactively
 			trendingResults = data.results;
+			if (data.results.length > 0) {
+				trendingLoaded = true;
+			}
 		} catch (error) {
 			console.error('Failed to load trending:', error);
 			// If trending fails (e.g., no key yet), show empty
