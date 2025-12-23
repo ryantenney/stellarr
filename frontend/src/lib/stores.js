@@ -245,3 +245,34 @@ export function clearLibraryStatus() {
 		timestamp: 0
 	});
 }
+
+// =============================================================================
+// Push Notifications Store
+// =============================================================================
+
+// Track push subscription state
+export const pushSubscribed = writable(false);
+export const pushSupported = writable(false);
+export const pushPermission = writable('default');
+
+// Check if push is supported
+export function checkPushSupport() {
+	if (!browser) return false;
+	const supported = 'serviceWorker' in navigator && 'PushManager' in window;
+	pushSupported.set(supported);
+	return supported;
+}
+
+// Check current notification permission
+export function checkPushPermission() {
+	if (!browser || !('Notification' in window)) return 'denied';
+	const permission = Notification.permission;
+	pushPermission.set(permission);
+	return permission;
+}
+
+// Initialize push state on load
+if (browser) {
+	checkPushSupport();
+	checkPushPermission();
+}

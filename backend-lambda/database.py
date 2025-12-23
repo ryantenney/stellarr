@@ -132,8 +132,11 @@ def is_requested(tmdb_id: int, media_type: str) -> bool:
         return False
 
 
-def mark_as_added(tmdb_id: int, media_type: str) -> bool:
-    """Mark a request as added to Plex library."""
+def mark_as_added(tmdb_id: int, media_type: str) -> dict | None:
+    """
+    Mark a request as added to Plex library.
+    Returns the updated request (with requested_by, title, poster info) or None if not matched.
+    """
     try:
         result = _get_client().update_item(
             key={
@@ -145,15 +148,15 @@ def mark_as_added(tmdb_id: int, media_type: str) -> bool:
             expression_attribute_values={
                 ':now': datetime.now(timezone.utc).isoformat()
             },
-            return_values='UPDATED_NEW'
+            return_values='ALL_NEW'
         )
-        return result is not None
+        return result if result else None
     except ConditionalCheckFailedException:
         # Either item doesn't exist or already marked as added
-        return False
+        return None
     except Exception as e:
         print(f"Error marking request as added: {e}", flush=True)
-        return False
+        return None
 
 
 def find_by_tvdb_id(tvdb_id: int, media_type: str) -> dict | None:
@@ -576,3 +579,63 @@ def get_all_library_tmdb_ids() -> dict[str, list[int]]:
     except Exception as e:
         print(f"Error getting library tmdb ids: {e}", flush=True)
         return {"movie": [], "tv": []}
+
+
+# --- Push Subscriptions ---
+# Stores push notification subscriptions keyed by user name
+# Schema: media_type='PUSH#{user_name}', tmdb_id=0 (dummy), endpoint, keys, subscribed_at
+
+def save_push_subscription(user_name: str, subscription: dict) -> bool:
+    """
+    Save or update a push subscription for a user.
+    subscription should have 'endpoint' and 'keys' (p256dh, auth).
+    """
+    try:
+        client = _get_client()
+        client.put_item({
+            'media_type': f'PUSH#{user_name}',
+            'tmdb_id': 0,  # Dummy sort key
+            'endpoint': subscription['endpoint'],
+            'keys': subscription['keys'],
+            'subscribed_at': datetime.now(timezone.utc).isoformat()
+        })
+        return True
+    except Exception as e:
+        print(f"Error saving push subscription: {e}", flush=True)
+        return False
+
+
+def get_push_subscription(user_name: str) -> dict | None:
+    """
+    Get push subscription for a user.
+    Returns dict with 'endpoint' and 'keys', or None if not subscribed.
+    """
+    try:
+        client = _get_client()
+        item = client.get_item({
+            'media_type': f'PUSH#{user_name}',
+            'tmdb_id': 0
+        })
+        if item:
+            return {
+                'endpoint': item['endpoint'],
+                'keys': item['keys']
+            }
+        return None
+    except Exception as e:
+        print(f"Error getting push subscription: {e}", flush=True)
+        return None
+
+
+def delete_push_subscription(user_name: str) -> bool:
+    """Delete push subscription for a user."""
+    try:
+        client = _get_client()
+        client.delete_item({
+            'media_type': f'PUSH#{user_name}',
+            'tmdb_id': 0
+        })
+        return True
+    except Exception as e:
+        print(f"Error deleting push subscription: {e}", flush=True)
+        return False

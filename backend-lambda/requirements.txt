@@ -10,8 +10,8 @@ httpx==0.26.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 
-# RSS generation
-feedgen==1.0.0
-
 # Note: boto3 removed - using custom lightweight DynamoDB client
 # This saves ~70MB in package size and improves cold starts
+
+# Note: cryptography is in a separate Lambda Layer (only needed for push notifications)
+# See requirements-layer.txt

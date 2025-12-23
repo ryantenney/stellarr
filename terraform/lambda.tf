@@ -97,6 +97,33 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
   })
 }
 
+# Lambda Layer for heavy dependencies (cryptography)
+# Only loaded when push notifications are sent (webhook handler)
+resource "aws_lambda_layer_version" "deps" {
+  layer_name          = "${local.name_prefix}-deps"
+  description         = "Heavy dependencies (cryptography) for push notifications"
+  compatible_runtimes = ["python3.12"]
+  compatible_architectures = ["arm64"]
+
+  # Placeholder - updated by deploy script
+  filename         = data.archive_file.layer_placeholder.output_path
+  source_code_hash = data.archive_file.layer_placeholder.output_base64sha256
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
+}
+
+data "archive_file" "layer_placeholder" {
+  type        = "zip"
+  output_path = "${path.module}/.terraform/layer_placeholder.zip"
+
+  source {
+    content  = "# Placeholder"
+    filename = "python/placeholder.txt"
+  }
+}
+
 # Lambda function
 resource "aws_lambda_function" "api" {
   function_name = "${local.name_prefix}-api"
@@ -106,6 +133,7 @@ resource "aws_lambda_function" "api" {
   architectures = ["arm64"]  # Graviton2 - faster and 20% cheaper
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory
+  layers        = [aws_lambda_layer_version.deps.arn]
 
   # Placeholder - will be updated by CI/CD
   filename         = data.archive_file.lambda_placeholder.output_path
@@ -123,6 +151,7 @@ resource "aws_lambda_function" "api" {
       RATE_LIMIT_ENABLED        = var.enable_rate_limiting ? "true" : "false"
       RATE_LIMIT_MAX_ATTEMPTS   = tostring(var.rate_limit_max_attempts)
       RATE_LIMIT_WINDOW_SECONDS = tostring(var.rate_limit_window_seconds)
+      VAPID_PUBLIC_KEY          = terraform_data.vapid_keys.output.public_key
     }
   }
 

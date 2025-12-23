@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     plex_webhook_token: str = ""
     plex_server_name: str = ""
     tvdb_api_key: str = ""
+    vapid_private_key: str = ""  # For web push notifications
 
     # TMDB
     tmdb_base_url: str = "https://api.themoviedb.org/3"
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
             self.plex_webhook_token = app_config.get('PLEX_WEBHOOK_TOKEN', '')
             self.plex_server_name = app_config.get('PLEX_SERVER_NAME', '')
             self.tvdb_api_key = app_config.get('TVDB_API_KEY', '')
+            self.vapid_private_key = app_config.get('VAPID_PRIVATE_KEY', '')
         else:
             print("DEBUG: WARNING - APP_SECRET_ARN not set", flush=True)
 

@@ -22,7 +22,6 @@ print("DEBUG: Starting main.py module load...", flush=True)
 _settings = None
 _database = None
 _tmdb_client = None
-_rss_module = None
 _plex_module = None
 _tvdb_module = None
 
@@ -57,16 +56,6 @@ def get_tmdb_client():
     return _tmdb_client
 
 
-def get_rss_module():
-    """Lazy load RSS module on first use."""
-    global _rss_module
-    if _rss_module is None:
-        print("DEBUG: Lazy loading RSS module...", flush=True)
-        import rss
-        _rss_module = rss
-    return _rss_module
-
-
 def get_plex_module():
     """Lazy load Plex module on first use."""
     global _plex_module
@@ -87,6 +76,18 @@ def get_tvdb_module():
     return _tvdb_module
 
 
+_webpush_module = None
+
+def get_webpush_module():
+    """Lazy load WebPush module on first use."""
+    global _webpush_module
+    if _webpush_module is None:
+        print("DEBUG: Lazy loading WebPush module...", flush=True)
+        import webpush
+        _webpush_module = webpush
+    return _webpush_module
+
+
 # Rate limiting config (from Terraform env vars)
 RATE_LIMIT_ENABLED = os.environ.get('RATE_LIMIT_ENABLED', 'false').lower() == 'true'
 RATE_LIMIT_MAX_ATTEMPTS = int(os.environ.get('RATE_LIMIT_MAX_ATTEMPTS', '5'))
@@ -99,17 +100,20 @@ ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
 SESSION_DURATION_SECONDS = 30 * 24 * 60 * 60
 
 
-def create_session_token() -> str:
-    """Create a signed session token with timestamp."""
+def create_session_token(name: str = "") -> str:
+    """Create a signed session token with timestamp and optional name."""
     settings = get_settings_lazy()
     timestamp = str(int(time.time()))
+    # Include name in the signed payload
+    name_b64 = base64.urlsafe_b64encode(name.encode()).decode().rstrip("=") if name else ""
+    payload = f"{timestamp}.{name_b64}"
     signature = hmac.new(
         settings.app_secret_key.encode(),
-        timestamp.encode(),
+        payload.encode(),
         hashlib.sha256
     ).digest()
     sig_b64 = base64.urlsafe_b64encode(signature).decode().rstrip("=")
-    return f"{timestamp}.{sig_b64}"
+    return f"{payload}.{sig_b64}"
 
 
 def verify_session_token(authorization: str | None = Header(None, alias="Authorization")) -> bool:
@@ -122,11 +126,22 @@ def verify_session_token(authorization: str | None = Header(None, alias="Authori
         raise HTTPException(status_code=401, detail="Invalid authorization format")
 
     token = parts[1]
+    token_parts = token.split(".")
+
+    # New format: timestamp.name_b64.signature (3 parts)
+    # Old format: timestamp.signature (2 parts) - backwards compatible
+    if len(token_parts) == 3:
+        timestamp_str, name_b64, sig_b64 = token_parts
+        payload = f"{timestamp_str}.{name_b64}"
+    elif len(token_parts) == 2:
+        timestamp_str, sig_b64 = token_parts
+        payload = timestamp_str
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token format")
 
     try:
-        timestamp_str, sig_b64 = token.split(".", 1)
         timestamp = int(timestamp_str)
-    except (ValueError, AttributeError):
+    except ValueError:
         raise HTTPException(status_code=401, detail="Invalid token format")
 
     if time.time() - timestamp > SESSION_DURATION_SECONDS:
@@ -135,7 +150,7 @@ def verify_session_token(authorization: str | None = Header(None, alias="Authori
     settings = get_settings_lazy()
     expected_sig = hmac.new(
         settings.app_secret_key.encode(),
-        timestamp_str.encode(),
+        payload.encode(),
         hashlib.sha256
     ).digest()
     expected_b64 = base64.urlsafe_b64encode(expected_sig).decode().rstrip("=")
@@ -146,6 +161,34 @@ def verify_session_token(authorization: str | None = Header(None, alias="Authori
     return True
 
 
+def get_user_from_token(authorization: str | None = Header(None, alias="Authorization")) -> str | None:
+    """Extract user name from session token. Returns None if not available."""
+    if not authorization:
+        return None
+
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+
+    token = parts[1]
+    token_parts = token.split(".")
+
+    # New format: timestamp.name_b64.signature (3 parts)
+    if len(token_parts) == 3:
+        _, name_b64, _ = token_parts
+        if name_b64:
+            try:
+                # Restore padding for base64 decode
+                padding = 4 - (len(name_b64) % 4)
+                if padding != 4:
+                    name_b64 += '=' * padding
+                return base64.urlsafe_b64decode(name_b64).decode('utf-8')
+            except Exception:
+                return None
+
+    return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan handler - DB init moved to module level for Lambda."""
@@ -154,7 +197,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Overseer Lite",
-    description="A lightweight media request system with RSS feeds for Sonarr/Radarr",
+    description="A lightweight media request system for Sonarr/Radarr",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -335,7 +378,7 @@ def verify_auth(data: AuthChallenge, request: Request):
         db = get_database()
         db.clear_rate_limit(client_ip)
 
-    token = create_session_token()
+    token = create_session_token(name)
     return {"valid": True, "token": token, "name": name}
 
 
@@ -605,49 +648,166 @@ def get_library_status(_: bool = Depends(verify_session_token)):
     }
 
 
-# --- RSS Feeds ---
+# --- Push Notifications ---
 
-@app.get("/rss/movies")
-def rss_movies(request: Request, _: bool = Depends(verify_feed_token)):
-    """RSS feed for movie requests (Radarr compatible)."""
-    rss = get_rss_module()
-    base_url = get_base_url(request)
-    xml = rss.generate_movie_rss(base_url)
-    return Response(content=xml, media_type="application/rss+xml")
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: dict  # {'p256dh': '...', 'auth': '...'}
 
 
-@app.get("/rss/tv")
-def rss_tv(request: Request, _: bool = Depends(verify_feed_token)):
-    """RSS feed for TV show requests."""
-    rss = get_rss_module()
-    base_url = get_base_url(request)
-    xml = rss.generate_tv_rss(base_url)
-    return Response(content=xml, media_type="application/rss+xml")
+@app.get("/api/push/vapid-public-key")
+def get_vapid_public_key(_: bool = Depends(verify_session_token)):
+    """Get VAPID public key for push subscription."""
+    # Public key is passed via environment variable (generated by Terraform)
+    # This avoids loading the cryptography library just for the public key
+    public_key = os.environ.get('VAPID_PUBLIC_KEY')
+    if not public_key:
+        raise HTTPException(status_code=501, detail="Push notifications not configured")
+
+    return {"public_key": public_key}
 
 
-@app.get("/rss/all")
-def rss_all(request: Request, _: bool = Depends(verify_feed_token)):
-    """Combined RSS feed for all requests."""
-    rss = get_rss_module()
-    base_url = get_base_url(request)
-    xml = rss.generate_combined_rss(base_url)
-    return Response(content=xml, media_type="application/rss+xml")
+@app.post("/api/push/subscribe")
+def subscribe_push(
+    subscription: PushSubscription,
+    user_name: str = Depends(get_user_from_token)
+):
+    """Subscribe to push notifications."""
+    if not user_name:
+        raise HTTPException(status_code=401, detail="User name required for push subscription")
+
+    db = get_database()
+    success = db.save_push_subscription(user_name, {
+        'endpoint': subscription.endpoint,
+        'keys': subscription.keys
+    })
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save subscription")
+
+    print(f"PUSH: Subscribed user '{user_name}'", flush=True)
+    return {"status": "subscribed"}
 
 
-# --- JSON Lists ---
+@app.delete("/api/push/subscribe")
+def unsubscribe_push(user_name: str = Depends(get_user_from_token)):
+    """Unsubscribe from push notifications."""
+    if not user_name:
+        raise HTTPException(status_code=401, detail="User name required")
+
+    db = get_database()
+    db.delete_push_subscription(user_name)
+    print(f"PUSH: Unsubscribed user '{user_name}'", flush=True)
+    return {"status": "unsubscribed"}
+
+
+@app.get("/api/push/status")
+def get_push_status(user_name: str = Depends(get_user_from_token)):
+    """Check if user has an active push subscription."""
+    if not user_name:
+        return {"subscribed": False}
+
+    db = get_database()
+    subscription = db.get_push_subscription(user_name)
+    return {"subscribed": subscription is not None}
+
+
+def send_fulfillment_notification(request_data: dict) -> bool:
+    """
+    Send a push notification when a request is fulfilled.
+    request_data should have: requested_by, title, poster_path, media_type.
+    Returns True if notification sent successfully.
+    """
+    settings = get_settings_lazy()
+    if not settings.vapid_private_key:
+        return False
+
+    requested_by = request_data.get('requested_by')
+    if not requested_by:
+        print("PUSH: No requested_by in request, skipping notification", flush=True)
+        return False
+
+    db = get_database()
+    subscription = db.get_push_subscription(requested_by)
+    if not subscription:
+        print(f"PUSH: No subscription for user '{requested_by}', skipping notification", flush=True)
+        return False
+
+    title = request_data.get('title', 'Unknown')
+    media_type = request_data.get('media_type', 'media')
+    poster_path = request_data.get('poster_path')
+
+    # Build notification payload
+    type_label = "Movie" if media_type == "movie" else "TV Show"
+    notification = {
+        "title": f"{type_label} Available",
+        "body": f"{title} has been added to the library!",
+        "tag": f"fulfilled-{media_type}-{request_data.get('tmdb_id', 0)}",
+    }
+
+    # Add poster image if available
+    if poster_path:
+        notification["image"] = f"https://image.tmdb.org/t/p/w300{poster_path}"
+        notification["icon"] = f"https://image.tmdb.org/t/p/w92{poster_path}"
+
+    try:
+        webpush = get_webpush_module()
+        success = webpush.send_push(
+            subscription=subscription,
+            data=notification,
+            vapid_private_key=settings.vapid_private_key,
+            vapid_claims={"sub": "mailto:admin@example.com"}
+        )
+        if success:
+            print(f"PUSH: Sent notification to '{requested_by}' for '{title}'", flush=True)
+        else:
+            # Subscription invalid/expired - clean it up
+            print(f"PUSH: Subscription expired for '{requested_by}', removing", flush=True)
+            db.delete_push_subscription(requested_by)
+        return success
+    except Exception as e:
+        print(f"PUSH: Error sending notification to '{requested_by}': {e}", flush=True)
+        return False
+
+
+# --- JSON Lists for Sonarr/Radarr ---
 
 @app.get("/list/radarr")
 def list_radarr(_: bool = Depends(verify_feed_token)):
     """Radarr StevenLu Custom list format (JSON)."""
-    rss = get_rss_module()
-    return rss.generate_radarr_json()
+    db = get_database()
+    all_requests = db.get_all_requests(media_type="movie")
+    # Filter out items already added to library
+    requests = [r for r in all_requests if not r.get('added_at')]
+
+    items = []
+    for req in requests:
+        item = {
+            "title": f"{req['title']} ({req['year']})" if req.get('year') else req['title'],
+        }
+        if req.get('imdb_id'):
+            item["imdb_id"] = req['imdb_id']
+        if req.get('poster_path'):
+            item["poster_url"] = f"https://image.tmdb.org/t/p/w300{req['poster_path']}"
+        items.append(item)
+
+    return items
 
 
 @app.get("/list/sonarr")
 def list_sonarr(_: bool = Depends(verify_feed_token)):
     """Sonarr Custom List format (JSON)."""
-    rss = get_rss_module()
-    return rss.generate_sonarr_json()
+    db = get_database()
+    all_requests = db.get_all_requests(media_type="tv")
+    # Filter out items already added to library
+    requests = [r for r in all_requests if not r.get('added_at')]
+
+    items = []
+    for req in requests:
+        if req.get('tvdb_id'):
+            items.append({"tvdbId": str(req['tvdb_id'])})
+
+    return items
 
 
 # --- Feed Info ---
@@ -665,36 +825,17 @@ def get_feed_info(request: Request):
         "feeds": {
             "radarr": {
                 "name": "Radarr (Movies)",
-                "description": "StevenLu Custom JSON format - RECOMMENDED for Radarr",
+                "description": "StevenLu Custom JSON format for Radarr",
                 "url": f"{base_url}/list/radarr{token_param}",
                 "format": "json",
                 "setup": "Settings -> Import Lists -> Custom Lists -> StevenLu Custom"
             },
-            "radarr_rss": {
-                "name": "Radarr RSS (Movies)",
-                "description": "RSS format with IMDB IDs",
-                "url": f"{base_url}/rss/movies{token_param}",
-                "format": "rss",
-                "setup": "Settings -> Import Lists -> Custom Lists -> RSS List"
-            },
             "sonarr": {
                 "name": "Sonarr (TV Shows)",
-                "description": "Custom List JSON format with TVDB IDs - RECOMMENDED for Sonarr",
+                "description": "Custom List JSON format with TVDB IDs for Sonarr",
                 "url": f"{base_url}/list/sonarr{token_param}",
                 "format": "json",
                 "setup": "Settings -> Import Lists -> Add -> Custom Lists"
-            },
-            "tv_rss": {
-                "name": "TV Shows RSS",
-                "description": "RSS format for TV shows",
-                "url": f"{base_url}/rss/tv{token_param}",
-                "format": "rss"
-            },
-            "all_rss": {
-                "name": "All Media RSS",
-                "description": "Combined RSS feed for all requests",
-                "url": f"{base_url}/rss/all{token_param}",
-                "format": "rss"
             }
         }
     }
@@ -799,13 +940,13 @@ def plex_webhook(
         print(f"WEBHOOK: Added to library - tmdb={show_tmdb_id} type='{media.media_type}'", flush=True)
 
     # Try to match and update request using our matching strategy
-    matched = False
+    # matched_request now contains the full request data (for push notifications)
     matched_request = None
 
     # 1. Try TMDB ID (most reliable for movies and shows)
     if show_tmdb_id:
-        matched = db.mark_as_added(show_tmdb_id, media.media_type)
-        if matched:
+        matched_request = db.mark_as_added(show_tmdb_id, media.media_type)
+        if matched_request:
             print(f"WEBHOOK: Matched request by TMDB ID {show_tmdb_id}", flush=True)
             # Cache the plex_guid for future episode webhooks
             if media.plex_guid:
@@ -813,30 +954,30 @@ def plex_webhook(
                 db.set_plex_guid_cache(media.plex_guid, show_tmdb_id, show_tvdb_id)
 
     # 2. Try TVDB ID (common for TV shows)
-    if not matched and show_tvdb_id and media.media_type == 'tv':
-        matched_request = db.find_by_tvdb_id(show_tvdb_id, media.media_type)
-        if matched_request:
-            matched = db.mark_as_added(matched_request['tmdb_id'], media.media_type)
-            if matched:
-                print(f"WEBHOOK: Matched request by TVDB ID {show_tvdb_id} -> TMDB {matched_request['tmdb_id']}", flush=True)
+    if not matched_request and show_tvdb_id and media.media_type == 'tv':
+        found_request = db.find_by_tvdb_id(show_tvdb_id, media.media_type)
+        if found_request:
+            matched_request = db.mark_as_added(found_request['tmdb_id'], media.media_type)
+            if matched_request:
+                print(f"WEBHOOK: Matched request by TVDB ID {show_tvdb_id} -> TMDB {found_request['tmdb_id']}", flush=True)
                 if media.plex_guid:
-                    db.update_plex_guid(matched_request['tmdb_id'], media.media_type, media.plex_guid)
-                    db.set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], show_tvdb_id)
+                    db.update_plex_guid(found_request['tmdb_id'], media.media_type, media.plex_guid)
+                    db.set_plex_guid_cache(media.plex_guid, found_request['tmdb_id'], show_tvdb_id)
 
     # 3. Try Plex GUID (for episodes/seasons using cached show GUID from requests table)
-    if not matched and media.plex_guid:
-        matched_request = db.find_by_plex_guid(media.plex_guid)
-        if matched_request:
-            matched = db.mark_as_added(matched_request['tmdb_id'], matched_request['media_type'])
-            if matched:
-                print(f"WEBHOOK: Matched request by Plex GUID -> TMDB {matched_request['tmdb_id']}", flush=True)
+    if not matched_request and media.plex_guid:
+        found_request = db.find_by_plex_guid(media.plex_guid)
+        if found_request:
+            matched_request = db.mark_as_added(found_request['tmdb_id'], found_request['media_type'])
+            if matched_request:
+                print(f"WEBHOOK: Matched request by Plex GUID -> TMDB {found_request['tmdb_id']}", flush=True)
                 # Also update the GUID cache if we matched from the request table
                 if not resolved_from_cache:
-                    db.set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], matched_request.get('tvdb_id'))
+                    db.set_plex_guid_cache(media.plex_guid, found_request['tmdb_id'], found_request.get('tvdb_id'))
 
     # 4. Try TVDB reverse lookup (episode TVDB ID → show TVDB ID)
     # Only do this if we have an episode TVDB ID and haven't matched yet
-    if not matched and media.episode_tvdb_id:
+    if not matched_request and media.episode_tvdb_id:
         import asyncio
         tvdb = get_tvdb_module()
         print(f"WEBHOOK: Attempting TVDB reverse lookup for episode {media.episode_tvdb_id}", flush=True)
@@ -845,23 +986,23 @@ def plex_webhook(
         )
         if show_tvdb_id_resolved:
             print(f"WEBHOOK: TVDB reverse lookup found show tvdb={show_tvdb_id_resolved}", flush=True)
-            matched_request = db.find_by_tvdb_id(show_tvdb_id_resolved, 'tv')
-            if matched_request:
-                matched = db.mark_as_added(matched_request['tmdb_id'], 'tv')
-                if matched:
-                    print(f"WEBHOOK: Matched request by TVDB reverse lookup - episode {media.episode_tvdb_id} -> show {show_tvdb_id_resolved} -> TMDB {matched_request['tmdb_id']}", flush=True)
+            found_request = db.find_by_tvdb_id(show_tvdb_id_resolved, 'tv')
+            if found_request:
+                matched_request = db.mark_as_added(found_request['tmdb_id'], 'tv')
+                if matched_request:
+                    print(f"WEBHOOK: Matched request by TVDB reverse lookup - episode {media.episode_tvdb_id} -> show {show_tvdb_id_resolved} -> TMDB {found_request['tmdb_id']}", flush=True)
                     if media.plex_guid:
-                        db.update_plex_guid(matched_request['tmdb_id'], 'tv', media.plex_guid)
+                        db.update_plex_guid(found_request['tmdb_id'], 'tv', media.plex_guid)
                         # Cache for future episode webhooks of this show
-                        db.set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], show_tvdb_id_resolved)
+                        db.set_plex_guid_cache(media.plex_guid, found_request['tmdb_id'], show_tvdb_id_resolved)
 
             # Even if we didn't match a request, cache the resolved show IDs for future episodes
             # This way next episode won't need TVDB lookup
             if media.plex_guid and not resolved_from_cache:
                 # We have the show's TVDB ID but may not have TMDB ID
                 # Still worth caching to avoid repeated TVDB lookups
-                if matched_request:
-                    db.set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], show_tvdb_id_resolved)
+                if found_request:
+                    db.set_plex_guid_cache(media.plex_guid, found_request['tmdb_id'], show_tvdb_id_resolved)
                 else:
                     # Cache just the TVDB ID - future lookups can use this
                     db.set_plex_guid_cache(media.plex_guid, None, show_tvdb_id_resolved)
@@ -869,26 +1010,31 @@ def plex_webhook(
 
     # 5. Try title-based matching as fallback (for unmatched Plex imports)
     # Only attempt if we still haven't matched and have no TMDB/TVDB IDs
-    if not matched and not show_tmdb_id and not show_tvdb_id:
+    if not matched_request and not show_tmdb_id and not show_tvdb_id:
         print(f"WEBHOOK: No IDs available, attempting title match for '{media.title}'", flush=True)
-        matched_request = db.find_by_title(media.title, media.media_type, media.year)
-        if matched_request:
-            matched = db.mark_as_added(matched_request['tmdb_id'], media.media_type)
-            if matched:
-                print(f"WEBHOOK: Matched request by title '{media.title}' -> TMDB {matched_request['tmdb_id']}", flush=True)
+        found_request = db.find_by_title(media.title, media.media_type, media.year)
+        if found_request:
+            matched_request = db.mark_as_added(found_request['tmdb_id'], media.media_type)
+            if matched_request:
+                print(f"WEBHOOK: Matched request by title '{media.title}' -> TMDB {found_request['tmdb_id']}", flush=True)
                 # Add to library using the request's TMDB ID
                 db.sync_library(
-                    [{"tmdb_id": matched_request['tmdb_id'], "tvdb_id": matched_request.get('tvdb_id'), "title": media.title}],
+                    [{"tmdb_id": found_request['tmdb_id'], "tvdb_id": found_request.get('tvdb_id'), "title": media.title}],
                     media.media_type,
                     clear_first=False
                 )
                 added_to_library = True
                 # Cache plex_guid for future lookups
                 if media.plex_guid:
-                    db.update_plex_guid(matched_request['tmdb_id'], media.media_type, media.plex_guid)
-                    db.set_plex_guid_cache(media.plex_guid, matched_request['tmdb_id'], matched_request.get('tvdb_id'))
+                    db.update_plex_guid(found_request['tmdb_id'], media.media_type, media.plex_guid)
+                    db.set_plex_guid_cache(media.plex_guid, found_request['tmdb_id'], found_request.get('tvdb_id'))
         else:
             print(f"WEBHOOK: Title match failed - no unique match found", flush=True)
+
+    # Send push notification if we matched a request
+    notification_sent = False
+    if matched_request:
+        notification_sent = send_fulfillment_notification(matched_request)
 
     # Use resolved show-level TMDB ID in result (or original if show/movie)
     result_tmdb_id = show_tmdb_id if show_tmdb_id else media.tmdb_id
@@ -899,7 +1045,8 @@ def plex_webhook(
         "plex_type": media.plex_type,
         "tmdb_id": result_tmdb_id,
         "added_to_library": added_to_library,
-        "matched_request": matched
+        "matched_request": matched_request is not None,
+        "notification_sent": notification_sent
     }
     print(f"WEBHOOK: Complete - {result}", flush=True)
 

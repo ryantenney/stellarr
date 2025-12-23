@@ -178,3 +178,32 @@ export async function getFeedInfo() {
 export async function getLibraryStatus() {
 	return request('/library-status');
 }
+
+// --- Push Notifications ---
+
+export async function getVapidPublicKey() {
+	return request('/push/vapid-public-key');
+}
+
+export async function subscribePush(subscription) {
+	return request('/push/subscribe', {
+		method: 'POST',
+		body: JSON.stringify({
+			endpoint: subscription.endpoint,
+			keys: {
+				p256dh: subscription.keys.p256dh,
+				auth: subscription.keys.auth
+			}
+		})
+	});
+}
+
+export async function unsubscribePush() {
+	return request('/push/subscribe', {
+		method: 'DELETE'
+	});
+}
+
+export async function getPushStatus() {
+	return request('/push/status');
+}

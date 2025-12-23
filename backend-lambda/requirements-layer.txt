@@ -1,0 +1,3 @@
+# Lambda Layer: Heavy dependencies
+# Only loaded when needed (push notifications in webhook handler)
+cryptography>=42.0.0
