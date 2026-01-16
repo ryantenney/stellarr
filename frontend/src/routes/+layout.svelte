@@ -1,12 +1,13 @@
 <script>
 	import { onMount } from 'svelte';
 	import { authenticated, logout, toasts, addToast, updateLibraryStatus, pushSubscribed, pushSupported, pushPermission, checkPushPermission, iosBrowserNeedsPwa } from '$lib/stores.js';
-	import { preloadAuthParams, getFeedInfo, getLibraryStatus, getVapidPublicKey, subscribePush, unsubscribePush, getPushStatus } from '$lib/api.js';
+	import { preloadAuthParams, getFeedInfo, getLibraryStatus, getVapidPublicKey, subscribePush, unsubscribePush } from '$lib/api.js';
 
 	const appName = import.meta.env.VITE_APP_NAME || 'Overseer';
 
 	let showFeedModal = false;
 	let showPwaModal = false;
+	let showPushModal = false;
 	let feedInfo = null;
 	let loadingFeeds = false;
 	let pushLoading = false;
@@ -35,21 +36,30 @@
 		}
 	}
 
-	// Check if user has push subscription on the server
+	// Check if this device has an active push subscription
 	async function checkPushState() {
 		if (!$pushSupported) return;
 
 		try {
-			const status = await getPushStatus();
-			pushSubscribed.set(status.subscribed);
+			// Check the browser's PushManager directly to see if THIS device is subscribed
+			const registration = await navigator.serviceWorker.ready;
+			const subscription = await registration.pushManager.getSubscription();
+			pushSubscribed.set(subscription !== null);
 		} catch (error) {
 			console.error('Failed to check push status:', error);
+			pushSubscribed.set(false);
 		}
 	}
 
-	// Toggle push notifications
-	async function togglePush() {
+	// Show push confirmation modal
+	function openPushModal() {
 		if (pushLoading) return;
+		showPushModal = true;
+	}
+
+	// Confirm push action from modal
+	async function confirmPushAction() {
+		showPushModal = false;
 		pushLoading = true;
 
 		try {
@@ -279,7 +289,7 @@
 							class="nav-btn"
 							class:subscribed={$pushSubscribed}
 							class:loading={pushLoading}
-							on:click={togglePush}
+							on:click={openPushModal}
 							title={$pushSubscribed ? 'Disable notifications' : 'Enable notifications'}
 						>
 							<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill={$pushSubscribed && !pushLoading ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
@@ -412,6 +422,33 @@
 			</div>
 		</div>
 	{/if}
+
+	<!-- Push Notification Confirmation Modal -->
+	{#if showPushModal}
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+		<div class="modal-overlay" on:click={() => showPushModal = false}>
+			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+			<div class="modal push-modal" on:click|stopPropagation>
+				<div class="modal-header">
+					<h2>{$pushSubscribed ? 'Disable Notifications' : 'Enable Notifications'}</h2>
+					<button class="close-btn" on:click={() => showPushModal = false}>&times;</button>
+				</div>
+				<div class="modal-content">
+					{#if $pushSubscribed}
+						<p>You will no longer receive push notifications when your requests are added to the library.</p>
+					{:else}
+						<p>Get notified when your requested movies and TV shows are added to the library.</p>
+					{/if}
+					<div class="modal-actions">
+						<button class="btn-secondary" on:click={() => showPushModal = false}>Cancel</button>
+						<button class="btn-primary" on:click={confirmPushAction}>
+							{$pushSubscribed ? 'Disable' : 'Enable'}
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -503,6 +540,15 @@
 	.nav-btn:active {
 		color: var(--text-primary);
 		background: var(--bg-tertiary);
+	}
+
+	.nav-btn:focus {
+		outline: none;
+	}
+
+	.nav-btn:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 
 	.nav-btn.subscribed .bell-icon {
@@ -808,5 +854,53 @@
 		height: 1.25rem;
 		color: var(--accent);
 		flex-shrink: 0;
+	}
+
+	/* Push Notification Modal */
+	.push-modal {
+		max-width: 400px;
+	}
+
+	.push-modal .modal-content p {
+		margin: 0 0 1.5rem 0;
+		color: var(--text-secondary);
+		line-height: 1.5;
+	}
+
+	.modal-actions {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: flex-end;
+	}
+
+	.btn-primary,
+	.btn-secondary {
+		padding: 0.625rem 1.25rem;
+		border-radius: 0.5rem;
+		font-size: 0.9rem;
+		font-weight: 500;
+		cursor: pointer;
+		border: none;
+		transition: background 0.2s;
+	}
+
+	.btn-primary {
+		background: var(--accent);
+		color: white;
+	}
+
+	.btn-primary:hover,
+	.btn-primary:active {
+		background: var(--accent-hover);
+	}
+
+	.btn-secondary {
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
+	}
+
+	.btn-secondary:hover,
+	.btn-secondary:active {
+		background: var(--border);
 	}
 </style>
