@@ -1,0 +1,124 @@
+{
+	"nav": {
+		"search": "Search",
+		"requests": "Requests",
+		"feedUrls": "Feed URLs",
+		"logout": "Logout",
+		"enableNotifications": "Enable notifications",
+		"disableNotifications": "Disable notifications"
+	},
+	"auth": {
+		"title": "Overseer Lite",
+		"subtitle": "Enter your name and password to continue",
+		"namePlaceholder": "Your Name",
+		"passwordPlaceholder": "Password",
+		"submit": "Enter",
+		"checking": "Checking...",
+		"enterName": "Please enter your name",
+		"invalidCredentials": "Invalid credentials",
+		"welcome": "Welcome, {name}!"
+	},
+	"search": {
+		"placeholder": "Search for movies or TV shows...",
+		"clearSearch": "Clear search",
+		"results": "Search Results",
+		"trending": "Trending",
+		"noResults": "No results found",
+		"loading": "Loading..."
+	},
+	"filters": {
+		"all": "All",
+		"movies": "Movies",
+		"tvShows": "TV Shows"
+	},
+	"media": {
+		"tv": "TV",
+		"movie": "Movie",
+		"inLibrary": "In Library",
+		"requested": "Requested",
+		"request": "Request",
+		"unknown": "Unknown",
+		"noDescription": "No description available",
+		"seasons": "{count, plural, one {# Season} other {# Seasons}}",
+		"largeSeriesWarning": "Large series - may take a while to download",
+		"veryLargeSeriesWarning": "Very large series - may take significant time to download",
+		"viewInImdb": "View in IMDb",
+		"viewInTvdb": "View in TheTVDB",
+		"alreadyInPlex": "Already in Plex"
+	},
+	"requests": {
+		"title": "Requests",
+		"allStatus": "All Status",
+		"pending": "Pending",
+		"added": "Added",
+		"noRequests": "No requests yet",
+		"browseAndAdd": "Browse and add some!",
+		"noPending": "No pending requests",
+		"noAdded": "No added requests",
+		"removeRequest": "Remove request",
+		"addedToRequests": "Added \"{title}\" to requests",
+		"failedToAdd": "Failed to add request",
+		"failedToLoad": "Failed to load requests",
+		"removed": "Removed \"{title}\""
+	},
+	"requestsWarning": {
+		"title": "Warning:",
+		"missingIds": "{count, plural, one {# item} other {# items}} missing external IDs and won't appear in Sonarr/Radarr feeds.",
+		"missingImdb": "Missing IMDB ID - will not appear in Radarr feed",
+		"missingTvdb": "Missing TVDB ID - will not appear in Sonarr feed"
+	},
+	"removeModal": {
+		"title": "Remove Request?",
+		"confirm": "Are you sure you want to remove {title} from your requests?",
+		"cancel": "Cancel",
+		"remove": "Remove",
+		"removing": "Removing...",
+		"failed": "Failed to remove request"
+	},
+	"feedModal": {
+		"title": "Feed URLs for Sonarr/Radarr",
+		"loading": "Loading feed info...",
+		"failed": "Failed to load feed info",
+		"tokenRequired": "Feed token is required. URLs include the token parameter.",
+		"radarr": "Radarr (Movies)",
+		"sonarr": "Sonarr (TV Shows)",
+		"copyUrl": "Copy URL",
+		"copied": "URL copied to clipboard"
+	},
+	"pushModal": {
+		"enableTitle": "Enable Notifications",
+		"disableTitle": "Disable Notifications",
+		"enableDescription": "Get notified when your requested movies and TV shows are added to the library.",
+		"disableDescription": "You will no longer receive push notifications when your requests are added to the library.",
+		"cancel": "Cancel",
+		"enable": "Enable",
+		"disable": "Disable",
+		"enabled": "Notifications enabled!",
+		"disabled": "Notifications disabled",
+		"failed": "Failed to update notification settings",
+		"permissionDenied": "Notification permission denied",
+		"blocked": "Notifications are blocked. Enable in browser settings."
+	},
+	"pwaModal": {
+		"title": "Enable Notifications",
+		"description": "To receive push notifications on iOS, you need to install this app to your home screen.",
+		"step1": "Tap the {share} button",
+		"share": "Share",
+		"step2": "Scroll down and tap {addToHomeScreen}",
+		"addToHomeScreen": "Add to Home Screen",
+		"step3": "Open the app from your home screen",
+		"step4": "Tap the bell icon to enable notifications"
+	},
+	"pagination": {
+		"previous": "Previous",
+		"next": "Next",
+		"pageOf": "Page {current} of {total}"
+	},
+	"dates": {
+		"added": "Added: {date}",
+		"requested": "Requested: {date}"
+	},
+	"loading": {
+		"more": "Loading more..."
+	}
+}

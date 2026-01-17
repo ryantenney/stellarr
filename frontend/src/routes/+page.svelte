@@ -1,5 +1,6 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import {
 		authenticated,
 		loading,
@@ -142,20 +143,20 @@
 
 	async function handleLogin() {
 		if (!userName.trim()) {
-			addToast('Please enter your name', 'error');
+			addToast($_('auth.enterName'), 'error');
 			return;
 		}
 		try {
 			$loading = true;
 			const response = await verifyPassword(password, userName.trim());
 			setAuthenticated(response.token, response.name);
-			addToast(`Welcome, ${response.name}!`, 'success');
+			addToast($_('auth.welcome', { values: { name: response.name } }), 'success');
 			// Fetch library status (gets trending key), then load trending
 			const statusData = await getLibraryStatus();
 			updateLibraryStatus(statusData);
 			await loadTrending();
 		} catch (error) {
-			addToast(error.message || 'Invalid credentials', 'error');
+			addToast(error.message || $_('auth.invalidCredentials'), 'error');
 		} finally {
 			$loading = false;
 		}
@@ -189,7 +190,7 @@
 			// Store raw results - hydration happens reactively
 			searchResults = data.results;
 		} catch (error) {
-			addToast('Search failed', 'error');
+			addToast($_('requests.failedToLoad'), 'error');
 		} finally {
 			$loading = false;
 		}
@@ -212,11 +213,11 @@
 
 			// API call in background
 			await addRequest(item.id, item.media_type);
-			addToast(`Added "${item.title}" to requests`, 'success');
+			addToast($_('requests.addedToRequests', { values: { title: item.title } }), 'success');
 		} catch (error) {
 			// Revert on failure by refreshing from server
 			await refreshLibraryStatus();
-			addToast('Failed to add request', 'error');
+			addToast($_('requests.failedToAdd'), 'error');
 		}
 	}
 
@@ -231,7 +232,7 @@
 	}
 
 	$: displayResults = searchQuery.trim() ? hydratedSearch : hydratedTrending;
-	$: sectionTitle = searchQuery.trim() ? 'Search Results' : 'Trending';
+	$: sectionTitle = searchQuery.trim() ? $_('search.results') : $_('search.trending');
 
 	// Reset page/scroll when search/filter changes
 	$: if (searchQuery || mediaFilter) {
@@ -243,23 +244,23 @@
 {#if !$authenticated}
 	<div class="login-container">
 		<div class="login-card">
-			<h1>🎬 Overseer Lite</h1>
-			<p>Enter your name and password to continue</p>
+			<h1>🎬 {$_('auth.title')}</h1>
+			<p>{$_('auth.subtitle')}</p>
 			<form on:submit|preventDefault={handleLogin}>
 				<input
 					type="text"
 					bind:value={userName}
-					placeholder="Your Name"
+					placeholder={$_('auth.namePlaceholder')}
 					autocomplete="name"
 				/>
 				<input
 					type="password"
 					bind:value={password}
-					placeholder="Password"
+					placeholder={$_('auth.passwordPlaceholder')}
 					autocomplete="current-password"
 				/>
 				<button type="submit" disabled={$loading || !userName.trim()}>
-					{$loading ? 'Checking...' : 'Enter'}
+					{$loading ? $_('auth.checking') : $_('auth.submit')}
 				</button>
 			</form>
 		</div>
@@ -274,13 +275,13 @@
 					on:input={debounceSearch}
 					on:keydown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
 					enterkeyhint="search"
-					placeholder="Search for movies or TV shows..."
+					placeholder={$_('search.placeholder')}
 				/>
 				{#if searchQuery}
 					<button
 						class="clear-btn"
 						on:click={() => { searchQuery = ''; searchResults = []; }}
-						aria-label="Clear search"
+						aria-label={$_('search.clearSearch')}
 					>×</button>
 				{/if}
 			</div>
@@ -289,19 +290,19 @@
 					class:active={mediaFilter === 'all'}
 					on:click={() => { mediaFilter = 'all'; handleSearch(); loadTrending(); }}
 				>
-					All
+					{$_('filters.all')}
 				</button>
 				<button
 					class:active={mediaFilter === 'movie'}
 					on:click={() => { mediaFilter = 'movie'; handleSearch(); loadTrending(); }}
 				>
-					Movies
+					{$_('filters.movies')}
 				</button>
 				<button
 					class:active={mediaFilter === 'tv'}
 					on:click={() => { mediaFilter = 'tv'; handleSearch(); loadTrending(); }}
 				>
-					TV Shows
+					{$_('filters.tvShows')}
 				</button>
 			</div>
 		</div>
@@ -311,9 +312,9 @@
 		<h2>{sectionTitle}</h2>
 		<div class="grid-wrapper" bind:this={gridContainer}>
 		{#if $loading}
-			<div class="loading">Loading...</div>
+			<div class="loading">{$_('search.loading')}</div>
 		{:else if displayResults.length === 0}
-			<p class="no-results">No results found</p>
+			<p class="no-results">{$_('search.noResults')}</p>
 		{:else}
 			<div class="media-grid">
 				{#each (isMobile ? infiniteResults : paginatedResults) as item (item.id + item.media_type)}
@@ -329,34 +330,34 @@
 									on:error={handlePosterError}
 								/>
 							{/if}
-							<div class="media-type-badge">{item.media_type === 'tv' ? 'TV' : 'Movie'}</div>
+							<div class="media-type-badge">{item.media_type === 'tv' ? $_('media.tv') : $_('media.movie')}</div>
 							{#if item.vote_average}
 								<div class="rating-badge">{item.vote_average.toFixed(1)}</div>
 							{/if}
 							{#if item.in_library}
 								{#if item.media_type === 'movie' && item.imdb_id}
-									<a href="https://www.imdb.com/title/{item.imdb_id}" target="_blank" rel="noopener" class="library-badge" title="View in IMDb">In Library</a>
+									<a href="https://www.imdb.com/title/{item.imdb_id}" target="_blank" rel="noopener" class="library-badge" title={$_('media.viewInImdb')}>{$_('media.inLibrary')}</a>
 								{:else if item.media_type === 'tv' && item.tvdb_id}
-									<a href="https://thetvdb.com/series/{item.tvdb_id}" target="_blank" rel="noopener" class="library-badge" title="View in TheTVDB">In Library</a>
+									<a href="https://thetvdb.com/series/{item.tvdb_id}" target="_blank" rel="noopener" class="library-badge" title={$_('media.viewInTvdb')}>{$_('media.inLibrary')}</a>
 								{:else}
-									<div class="library-badge" title="Already in Plex">In Library</div>
+									<div class="library-badge" title={$_('media.alreadyInPlex')}>{$_('media.inLibrary')}</div>
 								{/if}
 							{:else if item.number_of_seasons}
 								{#if item.number_of_seasons > 10}
-									<div class="seasons-warning seasons-very-large" title="Very large series - {item.number_of_seasons} seasons may take significant time to download">
-										{item.number_of_seasons} Seasons
+									<div class="seasons-warning seasons-very-large" title={$_('media.veryLargeSeriesWarning')}>
+										{$_('media.seasons', { values: { count: item.number_of_seasons } })}
 									</div>
 								{:else if item.number_of_seasons > 6}
-									<div class="seasons-warning" title="Large series - {item.number_of_seasons} seasons may take a while to download">
-										{item.number_of_seasons} Seasons
+									<div class="seasons-warning" title={$_('media.largeSeriesWarning')}>
+										{$_('media.seasons', { values: { count: item.number_of_seasons } })}
 									</div>
 								{/if}
 							{/if}
 						</div>
 						<div class="info">
 							<h3 title={item.title}>{item.title}</h3>
-							<span class="year">{item.year || 'Unknown'}</span>
-							<p class="overview">{item.overview || 'No description available'}</p>
+							<span class="year">{item.year || $_('media.unknown')}</span>
+							<p class="overview">{item.overview || $_('media.noDescription')}</p>
 							<button
 								class="request-btn"
 								class:requested={item.requested}
@@ -365,11 +366,11 @@
 								disabled={item.requested || item.in_library}
 							>
 								{#if item.in_library}
-									In Library
+									{$_('media.inLibrary')}
 								{:else if item.requested}
-									✓ Requested
+									✓ {$_('media.requested')}
 								{:else}
-									+ Request
+									+ {$_('media.request')}
 								{/if}
 							</button>
 						</div>
@@ -381,7 +382,7 @@
 				<!-- Infinite scroll trigger -->
 				<div bind:this={loadMoreTrigger} class="load-more-trigger">
 					{#if hasMore}
-						<div class="loading-more">Loading more...</div>
+						<div class="loading-more">{$_('loading.more')}</div>
 					{/if}
 				</div>
 			{:else if totalPages > 1}
@@ -390,14 +391,14 @@
 						disabled={currentPage === 1}
 						on:click={() => currentPage--}
 					>
-						Previous
+						{$_('pagination.previous')}
 					</button>
-					<span>Page {currentPage} of {totalPages}</span>
+					<span>{$_('pagination.pageOf', { values: { current: currentPage, total: totalPages } })}</span>
 					<button
 						disabled={currentPage === totalPages}
 						on:click={() => currentPage++}
 					>
-						Next
+						{$_('pagination.next')}
 					</button>
 				</div>
 			{/if}

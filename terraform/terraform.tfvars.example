@@ -10,15 +10,17 @@ domain_name    = "overseer.example.com"
 hosted_zone_id = "Z1234567890ABC"  # Your Route53 hosted zone ID
 
 # Application secrets (use environment variables or secrets management in CI/CD)
+# Get a free TMDB API key at: https://www.themoviedb.org/settings/api
 # tmdb_api_key       = "your-tmdb-api-key"
 # preshared_password = "your-password"
-# feed_token         = "your-feed-token"
+# feed_token         = "your-feed-token"  # Random string to protect RSS/list endpoints
 
 # Plex webhook integration (optional)
 # plex_webhook_token = "your-plex-webhook-token"
 # plex_server_name   = "Your Plex Server Name"  # Must match Server.title in Plex webhooks
 
 # TVDB API (optional - enables episode-to-show lookup for better Plex matching)
+# Get a TVDB API key at: https://thetvdb.com/api-information
 # tvdb_api_key = "your-tvdb-api-key"
 
 # Lambda configuration

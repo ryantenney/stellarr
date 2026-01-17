@@ -1,0 +1,124 @@
+{
+	"nav": {
+		"search": "Buscar",
+		"requests": "Solicitudes",
+		"feedUrls": "URLs de feeds",
+		"logout": "Cerrar sesión",
+		"enableNotifications": "Activar notificaciones",
+		"disableNotifications": "Desactivar notificaciones"
+	},
+	"auth": {
+		"title": "Overseer Lite",
+		"subtitle": "Ingresa tu nombre y contraseña para continuar",
+		"namePlaceholder": "Tu nombre",
+		"passwordPlaceholder": "Contraseña",
+		"submit": "Entrar",
+		"checking": "Verificando...",
+		"enterName": "Por favor ingresa tu nombre",
+		"invalidCredentials": "Credenciales inválidas",
+		"welcome": "¡Bienvenido, {name}!"
+	},
+	"search": {
+		"placeholder": "Buscar películas o series...",
+		"clearSearch": "Limpiar búsqueda",
+		"results": "Resultados de búsqueda",
+		"trending": "Tendencias",
+		"noResults": "No se encontraron resultados",
+		"loading": "Cargando..."
+	},
+	"filters": {
+		"all": "Todo",
+		"movies": "Películas",
+		"tvShows": "Series"
+	},
+	"media": {
+		"tv": "TV",
+		"movie": "Película",
+		"inLibrary": "En biblioteca",
+		"requested": "Solicitado",
+		"request": "Solicitar",
+		"unknown": "Desconocido",
+		"noDescription": "Sin descripción disponible",
+		"seasons": "{count, plural, one {# Temporada} other {# Temporadas}}",
+		"largeSeriesWarning": "Serie larga - puede tardar en descargarse",
+		"veryLargeSeriesWarning": "Serie muy larga - puede tardar mucho en descargarse",
+		"viewInImdb": "Ver en IMDb",
+		"viewInTvdb": "Ver en TheTVDB",
+		"alreadyInPlex": "Ya está en Plex"
+	},
+	"requests": {
+		"title": "Solicitudes",
+		"allStatus": "Todos los estados",
+		"pending": "Pendiente",
+		"added": "Agregado",
+		"noRequests": "Aún no hay solicitudes",
+		"browseAndAdd": "¡Explora y agrega algunas!",
+		"noPending": "No hay solicitudes pendientes",
+		"noAdded": "No hay solicitudes agregadas",
+		"removeRequest": "Eliminar solicitud",
+		"addedToRequests": "Se agregó \"{title}\" a las solicitudes",
+		"failedToAdd": "Error al agregar la solicitud",
+		"failedToLoad": "Error al cargar las solicitudes",
+		"removed": "Se eliminó \"{title}\""
+	},
+	"requestsWarning": {
+		"title": "Advertencia:",
+		"missingIds": "{count, plural, one {# elemento} other {# elementos}} sin IDs externos y no aparecerán en los feeds de Sonarr/Radarr.",
+		"missingImdb": "Falta ID de IMDB - no aparecerá en el feed de Radarr",
+		"missingTvdb": "Falta ID de TVDB - no aparecerá en el feed de Sonarr"
+	},
+	"removeModal": {
+		"title": "¿Eliminar solicitud?",
+		"confirm": "¿Estás seguro de que quieres eliminar {title} de tus solicitudes?",
+		"cancel": "Cancelar",
+		"remove": "Eliminar",
+		"removing": "Eliminando...",
+		"failed": "Error al eliminar la solicitud"
+	},
+	"feedModal": {
+		"title": "URLs de feeds para Sonarr/Radarr",
+		"loading": "Cargando información de feeds...",
+		"failed": "Error al cargar la información de feeds",
+		"tokenRequired": "Se requiere token de feed. Las URLs incluyen el parámetro del token.",
+		"radarr": "Radarr (Películas)",
+		"sonarr": "Sonarr (Series)",
+		"copyUrl": "Copiar URL",
+		"copied": "URL copiada al portapapeles"
+	},
+	"pushModal": {
+		"enableTitle": "Activar notificaciones",
+		"disableTitle": "Desactivar notificaciones",
+		"enableDescription": "Recibe notificaciones cuando tus películas y series solicitadas se agreguen a la biblioteca.",
+		"disableDescription": "Ya no recibirás notificaciones push cuando tus solicitudes se agreguen a la biblioteca.",
+		"cancel": "Cancelar",
+		"enable": "Activar",
+		"disable": "Desactivar",
+		"enabled": "¡Notificaciones activadas!",
+		"disabled": "Notificaciones desactivadas",
+		"failed": "Error al actualizar la configuración de notificaciones",
+		"permissionDenied": "Permiso de notificación denegado",
+		"blocked": "Las notificaciones están bloqueadas. Actívalas en la configuración del navegador."
+	},
+	"pwaModal": {
+		"title": "Activar notificaciones",
+		"description": "Para recibir notificaciones push en iOS, necesitas instalar esta app en tu pantalla de inicio.",
+		"step1": "Toca el botón {share}",
+		"share": "Compartir",
+		"step2": "Desplázate hacia abajo y toca {addToHomeScreen}",
+		"addToHomeScreen": "Agregar a pantalla de inicio",
+		"step3": "Abre la app desde tu pantalla de inicio",
+		"step4": "Toca el icono de la campana para activar las notificaciones"
+	},
+	"pagination": {
+		"previous": "Anterior",
+		"next": "Siguiente",
+		"pageOf": "Página {current} de {total}"
+	},
+	"dates": {
+		"added": "Agregado: {date}",
+		"requested": "Solicitado: {date}"
+	},
+	"loading": {
+		"more": "Cargando más..."
+	}
+}

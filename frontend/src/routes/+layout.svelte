@@ -1,9 +1,14 @@
 <script>
 	import { onMount } from 'svelte';
+	import { _, isLoading as i18nLoading, locale } from 'svelte-i18n';
 	import { authenticated, logout, toasts, addToast, updateLibraryStatus, pushSubscribed, pushSupported, pushPermission, checkPushPermission, iosBrowserNeedsPwa } from '$lib/stores.js';
 	import { preloadAuthParams, getFeedInfo, getLibraryStatus, getVapidPublicKey, subscribePush, unsubscribePush } from '$lib/api.js';
+	import { initI18n, supportedLocales, setLocale } from '$lib/i18n.js';
+
+	initI18n();
 
 	const appName = import.meta.env.VITE_APP_NAME || 'Overseer';
+	let showLangDropdown = false;
 
 	let showFeedModal = false;
 	let showPwaModal = false;
@@ -67,14 +72,14 @@
 				// Unsubscribe
 				await unsubscribePush();
 				pushSubscribed.set(false);
-				addToast('Notifications disabled', 'info');
+				addToast($_('pushModal.disabled'), 'info');
 			} else {
 				// Subscribe
 				await enablePush();
 			}
 		} catch (error) {
 			console.error('Push toggle failed:', error);
-			addToast('Failed to update notification settings', 'error');
+			addToast($_('pushModal.failed'), 'error');
 		} finally {
 			pushLoading = false;
 		}
@@ -87,11 +92,11 @@
 			const permission = await Notification.requestPermission();
 			checkPushPermission();
 			if (permission !== 'granted') {
-				addToast('Notification permission denied', 'error');
+				addToast($_('pushModal.permissionDenied'), 'error');
 				return;
 			}
 		} else if (Notification.permission === 'denied') {
-			addToast('Notifications are blocked. Enable in browser settings.', 'error');
+			addToast($_('pushModal.blocked'), 'error');
 			return;
 		}
 
@@ -123,7 +128,7 @@
 		});
 
 		pushSubscribed.set(true);
-		addToast('Notifications enabled!', 'success');
+		addToast($_('pushModal.enabled'), 'success');
 	}
 
 	// Helper: Convert URL-safe base64 to Uint8Array
@@ -179,9 +184,22 @@
 
 	function copyUrl(url) {
 		navigator.clipboard.writeText(url);
-		addToast('URL copied to clipboard', 'success');
+		addToast($_('feedModal.copied'), 'success');
+	}
+
+	function handleLangSelect(code) {
+		setLocale(code);
+		showLangDropdown = false;
+	}
+
+	function closeLangDropdown(event) {
+		if (!event.target.closest('.lang-dropdown-container')) {
+			showLangDropdown = false;
+		}
 	}
 </script>
+
+<svelte:window on:click={closeLangDropdown} />
 
 <svelte:head>
 	<style>
@@ -262,22 +280,22 @@
 			</a>
 			{#if $authenticated}
 				<nav>
-					<a href="/" class="nav-link" title="Search">
+					<a href="/" class="nav-link" title={$_('nav.search')}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<circle cx="11" cy="11" r="8" />
 							<path d="M21 21l-4.35-4.35" />
 						</svg>
-						<span class="nav-text">Search</span>
+						<span class="nav-text">{$_('nav.search')}</span>
 					</a>
-					<a href="/requests" class="nav-link" title="Requests">
+					<a href="/requests" class="nav-link" title={$_('nav.requests')}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
 							<rect x="9" y="3" width="6" height="4" rx="1" />
 							<path d="M9 12h6M9 16h6" />
 						</svg>
-						<span class="nav-text">Requests</span>
+						<span class="nav-text">{$_('nav.requests')}</span>
 					</a>
-					<button class="nav-btn feeds-btn" on:click={openFeedModal} title="Feed URLs">
+					<button class="nav-btn feeds-btn" on:click={openFeedModal} title={$_('nav.feedUrls')}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<path d="M4 11a9 9 0 0 1 9 9" />
 							<path d="M4 4a16 16 0 0 1 16 16" />
@@ -290,7 +308,7 @@
 							class:subscribed={$pushSubscribed}
 							class:loading={pushLoading}
 							on:click={openPushModal}
-							title={$pushSubscribed ? 'Disable notifications' : 'Enable notifications'}
+							title={$pushSubscribed ? $_('nav.disableNotifications') : $_('nav.enableNotifications')}
 						>
 							<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill={$pushSubscribed && !pushLoading ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
 								<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -301,7 +319,7 @@
 						<button
 							class="nav-btn"
 							on:click={() => showPwaModal = true}
-							title="Enable notifications"
+							title={$_('nav.enableNotifications')}
 						>
 							<svg class="nav-icon bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -309,7 +327,34 @@
 							</svg>
 						</button>
 					{/if}
-					<button class="nav-btn logout-btn" on:click={logout} title="Logout">
+					<!-- Language switcher -->
+					<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+					<div class="lang-dropdown-container">
+						<button
+							class="nav-btn lang-btn"
+							on:click={() => showLangDropdown = !showLangDropdown}
+							title="Language"
+						>
+							<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10" />
+								<path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+							</svg>
+						</button>
+						{#if showLangDropdown}
+							<div class="lang-dropdown">
+								{#each supportedLocales as lang}
+									<button
+										class="lang-option"
+										class:active={$locale === lang.code}
+										on:click={() => handleLangSelect(lang.code)}
+									>
+										{lang.name}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+					<button class="nav-btn logout-btn" on:click={logout} title={$_('nav.logout')}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
 							<polyline points="16,17 21,12 16,7" />
@@ -341,42 +386,42 @@
 			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 			<div class="modal" on:click|stopPropagation>
 				<div class="modal-header">
-					<h2>Feed URLs for Sonarr/Radarr</h2>
+					<h2>{$_('feedModal.title')}</h2>
 					<button class="close-btn" on:click={() => showFeedModal = false}>&times;</button>
 				</div>
 				<div class="modal-content">
 					{#if loadingFeeds}
-						<div class="loading">Loading feed info...</div>
+						<div class="loading">{$_('feedModal.loading')}</div>
 					{:else if feedInfo}
 						{#if feedInfo.token_required}
-							<p class="token-notice">Feed token is required. URLs include the token parameter.</p>
+							<p class="token-notice">{$_('feedModal.tokenRequired')}</p>
 						{/if}
 
 						<div class="feed-section">
-							<h3>Radarr (Movies)</h3>
+							<h3>{$_('feedModal.radarr')}</h3>
 							<div class="feed-item">
 								<div class="feed-info">
 									<strong>{feedInfo.feeds.radarr.name}</strong>
 									<p>{feedInfo.feeds.radarr.description}</p>
 									<code>{feedInfo.feeds.radarr.setup}</code>
 								</div>
-								<button on:click={() => copyUrl(feedInfo.feeds.radarr.url)}>Copy URL</button>
+								<button on:click={() => copyUrl(feedInfo.feeds.radarr.url)}>{$_('feedModal.copyUrl')}</button>
 							</div>
 						</div>
 
 						<div class="feed-section">
-							<h3>Sonarr (TV Shows)</h3>
+							<h3>{$_('feedModal.sonarr')}</h3>
 							<div class="feed-item">
 								<div class="feed-info">
 									<strong>{feedInfo.feeds.sonarr.name}</strong>
 									<p>{feedInfo.feeds.sonarr.description}</p>
 									<code>{feedInfo.feeds.sonarr.setup}</code>
 								</div>
-								<button on:click={() => copyUrl(feedInfo.feeds.sonarr.url)}>Copy URL</button>
+								<button on:click={() => copyUrl(feedInfo.feeds.sonarr.url)}>{$_('feedModal.copyUrl')}</button>
 							</div>
 						</div>
 					{:else}
-						<div class="error">Failed to load feed info</div>
+						<div class="error">{$_('feedModal.failed')}</div>
 					{/if}
 				</div>
 			</div>
@@ -390,15 +435,15 @@
 			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 			<div class="modal pwa-modal" on:click|stopPropagation>
 				<div class="modal-header">
-					<h2>Enable Notifications</h2>
+					<h2>{$_('pwaModal.title')}</h2>
 					<button class="close-btn" on:click={() => showPwaModal = false}>&times;</button>
 				</div>
 				<div class="modal-content">
-					<p>To receive push notifications on iOS, you need to install this app to your home screen.</p>
+					<p>{$_('pwaModal.description')}</p>
 					<div class="pwa-steps">
 						<div class="pwa-step">
 							<span class="step-number">1</span>
-							<span>Tap the <strong>Share</strong> button</span>
+							<span>{$_('pwaModal.step1', { values: { share: '' }})}<strong>{$_('pwaModal.share')}</strong></span>
 							<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
 								<polyline points="16,6 12,2 8,6" />
@@ -407,15 +452,15 @@
 						</div>
 						<div class="pwa-step">
 							<span class="step-number">2</span>
-							<span>Scroll down and tap <strong>Add to Home Screen</strong></span>
+							<span>{$_('pwaModal.step2', { values: { addToHomeScreen: '' }})}<strong>{$_('pwaModal.addToHomeScreen')}</strong></span>
 						</div>
 						<div class="pwa-step">
 							<span class="step-number">3</span>
-							<span>Open the app from your home screen</span>
+							<span>{$_('pwaModal.step3')}</span>
 						</div>
 						<div class="pwa-step">
 							<span class="step-number">4</span>
-							<span>Tap the bell icon to enable notifications</span>
+							<span>{$_('pwaModal.step4')}</span>
 						</div>
 					</div>
 				</div>
@@ -430,19 +475,19 @@
 			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 			<div class="modal push-modal" on:click|stopPropagation>
 				<div class="modal-header">
-					<h2>{$pushSubscribed ? 'Disable Notifications' : 'Enable Notifications'}</h2>
+					<h2>{$pushSubscribed ? $_('pushModal.disableTitle') : $_('pushModal.enableTitle')}</h2>
 					<button class="close-btn" on:click={() => showPushModal = false}>&times;</button>
 				</div>
 				<div class="modal-content">
 					{#if $pushSubscribed}
-						<p>You will no longer receive push notifications when your requests are added to the library.</p>
+						<p>{$_('pushModal.disableDescription')}</p>
 					{:else}
-						<p>Get notified when your requested movies and TV shows are added to the library.</p>
+						<p>{$_('pushModal.enableDescription')}</p>
 					{/if}
 					<div class="modal-actions">
-						<button class="btn-secondary" on:click={() => showPushModal = false}>Cancel</button>
+						<button class="btn-secondary" on:click={() => showPushModal = false}>{$_('pushModal.cancel')}</button>
 						<button class="btn-primary" on:click={confirmPushAction}>
-							{$pushSubscribed ? 'Disable' : 'Enable'}
+							{$pushSubscribed ? $_('pushModal.disable') : $_('pushModal.enable')}
 						</button>
 					</div>
 				</div>
@@ -902,5 +947,48 @@
 	.btn-secondary:hover,
 	.btn-secondary:active {
 		background: var(--border);
+	}
+
+	/* Language dropdown */
+	.lang-dropdown-container {
+		position: relative;
+	}
+
+	.lang-dropdown {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		margin-top: 0.5rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		overflow: hidden;
+		z-index: 1000;
+		min-width: 120px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.lang-option {
+		display: block;
+		width: 100%;
+		padding: 0.75rem 1rem;
+		background: none;
+		border: none;
+		color: var(--text-secondary);
+		text-align: left;
+		cursor: pointer;
+		transition: background 0.2s, color 0.2s;
+		font-size: 0.9rem;
+	}
+
+	.lang-option:hover,
+	.lang-option:active {
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
+	}
+
+	.lang-option.active {
+		background: var(--accent);
+		color: white;
 	}
 </style>

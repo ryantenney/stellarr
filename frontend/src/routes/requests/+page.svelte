@@ -1,5 +1,6 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { authenticated, loading, addToast } from '$lib/stores.js';
 	import { getRequests, removeRequest } from '$lib/api.js';
 	import { goto } from '$app/navigation';
@@ -81,7 +82,7 @@
 			const data = await getRequests(filterType);
 			requests = data.requests;
 		} catch (error) {
-			addToast('Failed to load requests', 'error');
+			addToast($_('requests.failedToLoad'), 'error');
 		} finally {
 			$loading = false;
 		}
@@ -106,11 +107,11 @@
 			const tmdbId = Number(itemToRemove.tmdb_id);
 			const mediaType = itemToRemove.media_type;
 			requests = requests.filter(r => !(Number(r.tmdb_id) === tmdbId && r.media_type === mediaType));
-			addToast(`Removed "${itemToRemove.title}"`, 'success');
+			addToast($_('requests.removed', { values: { title: itemToRemove.title } }), 'success');
 			showConfirmModal = false;
 			itemToRemove = null;
 		} catch (error) {
-			addToast('Failed to remove request', 'error');
+			addToast($_('removeModal.failed'), 'error');
 		} finally {
 			removing = false;
 		}
@@ -133,10 +134,10 @@
 
 	function getMissingIdWarning(item) {
 		if (item.media_type === 'movie' && !item.imdb_id) {
-			return 'Missing IMDB ID - will not appear in Radarr feed';
+			return $_('requestsWarning.missingImdb');
 		}
 		if (item.media_type === 'tv' && !item.tvdb_id) {
-			return 'Missing TVDB ID - will not appear in Sonarr feed';
+			return $_('requestsWarning.missingTvdb');
 		}
 		return null;
 	}
@@ -149,11 +150,11 @@
 
 {#if $authenticated}
 	<div class="requests-page">
-		<h1>Requests</h1>
+		<h1>{$_('requests.title')}</h1>
 
 		{#if itemsWithMissingIds.length > 0}
 			<div class="warning-banner">
-				<strong>Warning:</strong> {itemsWithMissingIds.length} item{itemsWithMissingIds.length > 1 ? 's' : ''} missing external IDs and won't appear in Sonarr/Radarr feeds.
+				<strong>{$_('requestsWarning.title')}</strong> {$_('requestsWarning.missingIds', { values: { count: itemsWithMissingIds.length } })}
 			</div>
 		{/if}
 
@@ -163,19 +164,19 @@
 					class:active={mediaFilter === 'all'}
 					on:click={() => { mediaFilter = 'all'; loadRequests(); }}
 				>
-					All ({requests.length})
+					{$_('filters.all')} ({requests.length})
 				</button>
 				<button
 					class:active={mediaFilter === 'movie'}
 					on:click={() => { mediaFilter = 'movie'; loadRequests(); }}
 				>
-					Movies
+					{$_('filters.movies')}
 				</button>
 				<button
 					class:active={mediaFilter === 'tv'}
 					on:click={() => { mediaFilter = 'tv'; loadRequests(); }}
 				>
-					TV Shows
+					{$_('filters.tvShows')}
 				</button>
 			</div>
 
@@ -184,34 +185,34 @@
 					class:active={statusFilter === 'all'}
 					on:click={() => statusFilter = 'all'}
 				>
-					All Status
+					{$_('requests.allStatus')}
 				</button>
 				<button
 					class:active={statusFilter === 'pending'}
 					on:click={() => statusFilter = 'pending'}
 				>
-					Pending ({pendingCount})
+					{$_('requests.pending')} ({pendingCount})
 				</button>
 				<button
 					class:active={statusFilter === 'added'}
 					on:click={() => statusFilter = 'added'}
 				>
-					Added ({addedCount})
+					{$_('requests.added')} ({addedCount})
 				</button>
 			</div>
 		</div>
 
 		<div class="grid-wrapper" bind:this={gridContainer}>
 		{#if $loading}
-			<div class="loading">Loading...</div>
+			<div class="loading">{$_('search.loading')}</div>
 		{:else if requests.length === 0}
 			<div class="empty-state">
-				<p>No requests yet</p>
-				<a href="/">Browse and add some!</a>
+				<p>{$_('requests.noRequests')}</p>
+				<a href="/">{$_('requests.browseAndAdd')}</a>
 			</div>
 		{:else if filteredByStatus.length === 0}
 			<div class="empty-state">
-				<p>No {statusFilter === 'pending' ? 'pending' : 'added'} requests</p>
+				<p>{statusFilter === 'pending' ? $_('requests.noPending') : $_('requests.noAdded')}</p>
 			</div>
 		{:else}
 			<div class="requests-grid">
@@ -219,11 +220,11 @@
 					<div class="request-card" class:has-warning={getMissingIdWarning(item)} class:is-added={item.added_at}>
 						<div class="poster">
 							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
-							<div class="media-type-badge">{item.media_type === 'tv' ? 'TV' : 'Movie'}</div>
+							<div class="media-type-badge">{item.media_type === 'tv' ? $_('media.tv') : $_('media.movie')}</div>
 							{#if item.added_at}
-								<div class="status-badge in-library" title="Added to Plex on {formatDate(item.added_at)}">In Library</div>
+								<div class="status-badge in-library" title="{$_('dates.added', { values: { date: formatDate(item.added_at) } })}">{$_('media.inLibrary')}</div>
 							{:else}
-								<div class="status-badge requested">Requested</div>
+								<div class="status-badge requested">{$_('media.requested')}</div>
 							{/if}
 							{#if getMissingIdWarning(item) && !item.added_at}
 								<div class="warning-badge" title={getMissingIdWarning(item)}>!</div>
@@ -231,21 +232,21 @@
 							<button
 								class="remove-icon"
 								on:click={() => handleRemove(item)}
-								title="Remove request"
+								title={$_('requests.removeRequest')}
 							>×</button>
 						</div>
 						<div class="info">
 							<h3 title={item.title}>{item.title}</h3>
-							<span class="year">{item.year || 'Unknown'}</span>
-							<p class="overview">{item.overview || 'No description available'}</p>
+							<span class="year">{item.year || $_('media.unknown')}</span>
+							<p class="overview">{item.overview || $_('media.noDescription')}</p>
 							<div class="meta">
 								<span class="date">
 									{#if item.added_at}
-										Added: {formatDate(item.added_at)}
+										{$_('dates.added', { values: { date: formatDate(item.added_at) } })}
 									{:else if item.requested_by}
 										{item.requested_by} · {formatDate(item.created_at)}
 									{:else}
-										Requested: {formatDate(item.created_at)}
+										{$_('dates.requested', { values: { date: formatDate(item.created_at) } })}
 									{/if}
 								</span>
 								{#if item.imdb_id}
@@ -270,14 +271,14 @@
 						disabled={currentPage === 1}
 						on:click={() => currentPage--}
 					>
-						Previous
+						{$_('pagination.previous')}
 					</button>
-					<span>Page {currentPage} of {totalPages}</span>
+					<span>{$_('pagination.pageOf', { values: { current: currentPage, total: totalPages } })}</span>
 					<button
 						disabled={currentPage === totalPages}
 						on:click={() => currentPage++}
 					>
-						Next
+						{$_('pagination.next')}
 					</button>
 				</div>
 			{/if}
@@ -294,14 +295,14 @@
 				<div class="confirm-content">
 					<img src={getPosterUrl(itemToRemove.poster_path)} alt={itemToRemove.title} class="confirm-poster" />
 					<div class="confirm-text">
-						<h2>Remove Request?</h2>
-						<p>Are you sure you want to remove <strong>{itemToRemove.title}</strong> from your requests?</p>
+						<h2>{$_('removeModal.title')}</h2>
+						<p>{$_('removeModal.confirm', { values: { title: itemToRemove.title } })}</p>
 					</div>
 				</div>
 				<div class="confirm-actions">
-					<button class="cancel-btn" on:click={cancelRemove} disabled={removing}>Cancel</button>
+					<button class="cancel-btn" on:click={cancelRemove} disabled={removing}>{$_('removeModal.cancel')}</button>
 					<button class="confirm-btn" on:click={confirmRemove} disabled={removing}>
-						{removing ? 'Removing...' : 'Remove'}
+						{removing ? $_('removeModal.removing') : $_('removeModal.remove')}
 					</button>
 				</div>
 			</div>

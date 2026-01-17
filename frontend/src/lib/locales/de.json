@@ -1,0 +1,124 @@
+{
+	"nav": {
+		"search": "Suchen",
+		"requests": "Anfragen",
+		"feedUrls": "Feed-URLs",
+		"logout": "Abmelden",
+		"enableNotifications": "Benachrichtigungen aktivieren",
+		"disableNotifications": "Benachrichtigungen deaktivieren"
+	},
+	"auth": {
+		"title": "Overseer Lite",
+		"subtitle": "Geben Sie Ihren Namen und Ihr Passwort ein, um fortzufahren",
+		"namePlaceholder": "Ihr Name",
+		"passwordPlaceholder": "Passwort",
+		"submit": "Eingabe",
+		"checking": "Überprüfung...",
+		"enterName": "Bitte geben Sie Ihren Namen ein",
+		"invalidCredentials": "Ungültige Anmeldedaten",
+		"welcome": "Willkommen, {name}!"
+	},
+	"search": {
+		"placeholder": "Filme oder Serien suchen...",
+		"clearSearch": "Suche löschen",
+		"results": "Suchergebnisse",
+		"trending": "Beliebt",
+		"noResults": "Keine Ergebnisse gefunden",
+		"loading": "Laden..."
+	},
+	"filters": {
+		"all": "Alle",
+		"movies": "Filme",
+		"tvShows": "Serien"
+	},
+	"media": {
+		"tv": "TV",
+		"movie": "Film",
+		"inLibrary": "In Bibliothek",
+		"requested": "Angefragt",
+		"request": "Anfragen",
+		"unknown": "Unbekannt",
+		"noDescription": "Keine Beschreibung verfügbar",
+		"seasons": "{count, plural, one {# Staffel} other {# Staffeln}}",
+		"largeSeriesWarning": "Große Serie - Download kann eine Weile dauern",
+		"veryLargeSeriesWarning": "Sehr große Serie - Download kann sehr lange dauern",
+		"viewInImdb": "Auf IMDb ansehen",
+		"viewInTvdb": "Auf TheTVDB ansehen",
+		"alreadyInPlex": "Bereits in Plex"
+	},
+	"requests": {
+		"title": "Anfragen",
+		"allStatus": "Alle Status",
+		"pending": "Ausstehend",
+		"added": "Hinzugefügt",
+		"noRequests": "Noch keine Anfragen",
+		"browseAndAdd": "Stöbern und hinzufügen!",
+		"noPending": "Keine ausstehenden Anfragen",
+		"noAdded": "Keine hinzugefügten Anfragen",
+		"removeRequest": "Anfrage entfernen",
+		"addedToRequests": "\"{title}\" zu den Anfragen hinzugefügt",
+		"failedToAdd": "Anfrage konnte nicht hinzugefügt werden",
+		"failedToLoad": "Anfragen konnten nicht geladen werden",
+		"removed": "\"{title}\" entfernt"
+	},
+	"requestsWarning": {
+		"title": "Warnung:",
+		"missingIds": "{count, plural, one {# Element} other {# Elemente}} ohne externe IDs und wird nicht in den Sonarr/Radarr-Feeds erscheinen.",
+		"missingImdb": "IMDB-ID fehlt - wird nicht im Radarr-Feed erscheinen",
+		"missingTvdb": "TVDB-ID fehlt - wird nicht im Sonarr-Feed erscheinen"
+	},
+	"removeModal": {
+		"title": "Anfrage entfernen?",
+		"confirm": "Sind Sie sicher, dass Sie {title} aus Ihren Anfragen entfernen möchten?",
+		"cancel": "Abbrechen",
+		"remove": "Entfernen",
+		"removing": "Wird entfernt...",
+		"failed": "Anfrage konnte nicht entfernt werden"
+	},
+	"feedModal": {
+		"title": "Feed-URLs für Sonarr/Radarr",
+		"loading": "Feed-Informationen werden geladen...",
+		"failed": "Feed-Informationen konnten nicht geladen werden",
+		"tokenRequired": "Feed-Token erforderlich. URLs enthalten den Token-Parameter.",
+		"radarr": "Radarr (Filme)",
+		"sonarr": "Sonarr (Serien)",
+		"copyUrl": "URL kopieren",
+		"copied": "URL in die Zwischenablage kopiert"
+	},
+	"pushModal": {
+		"enableTitle": "Benachrichtigungen aktivieren",
+		"disableTitle": "Benachrichtigungen deaktivieren",
+		"enableDescription": "Erhalten Sie Benachrichtigungen, wenn Ihre angeforderten Filme und Serien zur Bibliothek hinzugefügt werden.",
+		"disableDescription": "Sie erhalten keine Push-Benachrichtigungen mehr, wenn Ihre Anfragen zur Bibliothek hinzugefügt werden.",
+		"cancel": "Abbrechen",
+		"enable": "Aktivieren",
+		"disable": "Deaktivieren",
+		"enabled": "Benachrichtigungen aktiviert!",
+		"disabled": "Benachrichtigungen deaktiviert",
+		"failed": "Benachrichtigungseinstellungen konnten nicht aktualisiert werden",
+		"permissionDenied": "Benachrichtigungsberechtigung verweigert",
+		"blocked": "Benachrichtigungen sind blockiert. Aktivieren Sie sie in den Browser-Einstellungen."
+	},
+	"pwaModal": {
+		"title": "Benachrichtigungen aktivieren",
+		"description": "Um Push-Benachrichtigungen auf iOS zu erhalten, müssen Sie diese App auf Ihrem Startbildschirm installieren.",
+		"step1": "Tippen Sie auf die {share}-Taste",
+		"share": "Teilen",
+		"step2": "Scrollen Sie nach unten und tippen Sie auf {addToHomeScreen}",
+		"addToHomeScreen": "Zum Home-Bildschirm",
+		"step3": "Öffnen Sie die App von Ihrem Startbildschirm",
+		"step4": "Tippen Sie auf das Glockensymbol, um Benachrichtigungen zu aktivieren"
+	},
+	"pagination": {
+		"previous": "Zurück",
+		"next": "Weiter",
+		"pageOf": "Seite {current} von {total}"
+	},
+	"dates": {
+		"added": "Hinzugefügt: {date}",
+		"requested": "Angefragt: {date}"
+	},
+	"loading": {
+		"more": "Mehr laden..."
+	}
+}
