@@ -67,48 +67,19 @@ This creates:
 - Route53 DNS records
 - Secrets Manager secret
 
-### 3. Deploy Backend
+### 3. Deploy Application
 
 ```bash
-cd ../backend-lambda
-./deploy.sh \
-  $(terraform -chdir=../terraform output -raw lambda_function_name) \
-  $(terraform -chdir=../terraform output -raw lambda_deployment_bucket)
+cd ..
+./deploy.sh --skip-tf   # Backend + frontend (skip terraform since we just ran it)
 ```
 
-### 4. Deploy Frontend
+**Other deploy options:**
 
 ```bash
-cd ../frontend
-npm install
-npm run build
-aws s3 sync build/ s3://$(terraform -chdir=../terraform output -raw frontend_bucket_name)
-```
-
-### 5. Invalidate CloudFront Cache
-
-```bash
-aws cloudfront create-invalidation \
-  --distribution-id $(terraform -chdir=../terraform output -raw cloudfront_distribution_id) \
-  --paths "/*"
-```
-
-## Unified Deployment Script
-
-After initial setup, use the unified deploy script:
-
-```bash
-# Deploy everything
-./deploy.sh
-
-# Skip Terraform (just redeploy code)
-./deploy.sh --skip-tf
-
-# Backend only
-./deploy.sh --backend
-
-# Frontend only (with cache invalidation)
-./deploy.sh --frontend
+./deploy.sh              # Full deploy (terraform + backend + frontend)
+./deploy.sh --backend    # Backend Lambda only
+./deploy.sh --frontend   # Frontend + CloudFront invalidation only
 ```
 
 ## Infrastructure Details
@@ -129,36 +100,16 @@ After initial setup, use the unified deploy script:
 ### CloudFront
 
 - HTTPS only (TLS 1.2+)
-- Caching for frontend assets and `/api/trending` (1 hour)
+- Caching for frontend assets and trending data (1 hour)
 - Gzip/Brotli compression
 
 ## Updating
 
-### Backend Changes
-
 ```bash
-cd backend-lambda
-./deploy.sh $(terraform -chdir=../terraform output -raw lambda_function_name) \
-  $(terraform -chdir=../terraform output -raw lambda_deployment_bucket)
-```
-
-### Frontend Changes
-
-```bash
-cd frontend
-npm run build
-aws s3 sync build/ s3://$(terraform -chdir=../terraform output -raw frontend_bucket_name)
-aws cloudfront create-invalidation \
-  --distribution-id $(terraform -chdir=../terraform output -raw cloudfront_distribution_id) \
-  --paths "/*"
-```
-
-### Infrastructure Changes
-
-```bash
-cd terraform
-terraform plan
-terraform apply
+./deploy.sh --backend    # Backend changes only
+./deploy.sh --frontend   # Frontend changes only
+./deploy.sh --skip-tf    # Both backend + frontend
+./deploy.sh              # Full deploy including terraform
 ```
 
 ## Monitoring

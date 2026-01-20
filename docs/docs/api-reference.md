@@ -98,20 +98,24 @@ Content-Type: application/json
 ### Get Trending
 
 ```http
-GET /api/trending?media_type=all
-Authorization: Bearer <token>
+GET /trending-{type}-{locale}.json
 ```
 
-**Query Parameters:**
+Trending data is served as static JSON files from S3 via CloudFront. No authentication required.
 
-| Parameter | Values | Default |
+**URL Parameters:**
+
+| Parameter | Values | Example |
 |-----------|--------|---------|
-| `media_type` | `all`, `movie`, `tv` | `all` |
+| `type` | `all`, `movie`, `tv` | `all` |
+| `locale` | `en`, `es`, `fr`, `de` | `en` |
+
+**Example:** `/trending-all-en.json`, `/trending-movie-fr.json`
 
 **Response:** Same format as search results.
 
 :::note
-This endpoint is cached for 1 hour via CloudFront. The frontend hydrates results with current request status client-side.
+Files are cached for 1 hour and refreshed daily by the cache warmer Lambda. The frontend hydrates results with current request status client-side.
 :::
 
 ## Requests

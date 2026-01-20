@@ -61,8 +61,8 @@ Both backends expose the same FastAPI endpoints. Changes to API structure must b
 - `/api/auth/params` - Returns PBKDF2 iterations for client-side key derivation
 - `/api/auth/verify` - Password authentication, returns HMAC-SHA256 signed token
 - `/api/search` - TMDB search with media type filter
-- `/api/trending?key=XXX` - Trending media (public, 24hr CloudFront cache, requires instance key)
-- `/api/library-status` - Library IDs + pending requests + trending key (authenticated)
+- `/trending-{all,movie,tv}.json` - Trending media (public, served from S3 via CloudFront, 1hr cache)
+- `/api/library-status` - Library IDs + pending requests (authenticated)
 - `/api/request`, `/api/requests` - Add/list/remove requests
 - `/api/feeds` - Get feed URLs for UI
 - `/list/radarr`, `/list/sonarr` - JSON feeds for import lists
@@ -84,7 +84,7 @@ Both backends expose the same FastAPI endpoints. Changes to API structure must b
 
 **Frontend:** `src/routes/+page.svelte` (search/home), `src/routes/requests/+page.svelte` (request list), `src/routes/+layout.svelte` (nav, feeds modal, PWA setup), `src/lib/api.js` (HTTP client), `src/lib/stores.js` (auth state, library status cache)
 
-**Cache Warmer:** `cache_warmer.py` (Lambda triggered by EventBridge every 24h to keep trending cache warm)
+**Cache Warmer:** `cache_warmer.py` (Lambda triggered by EventBridge every hour to fetch TMDB trending and write to S3)
 
 **Scripts:** `scripts/plex-sync.py` (bulk library sync)
 
@@ -104,10 +104,9 @@ Optional: `FEED_TOKEN` (protects feed endpoints), `PLEX_WEBHOOK_TOKEN` (protects
 - Frontend is a PWA with iOS/Android home screen support
 
 ### Trending Cache Architecture
-- `/api/trending` is a public endpoint protected by an instance-specific secret key (security-by-obscurity)
-- Trending key is auto-generated on first use and stored in DynamoDB/SQLite config table
-- CloudFront caches the response for 24 hours (including the key in the cache key)
-- EventBridge triggers a cache warmer Lambda every 24h to keep CloudFront cache populated
-- Frontend fetches library/request status on login via `/api/library-status` which includes the trending key
-- Library status is cached in localStorage and used to hydrate trending/search results client-side
-- This architecture ensures: (a) trending is cached for all users, (b) private status stays protected, (c) cache auto-refreshes daily
+- Trending data is served as static JSON files from S3 via CloudFront (no Lambda invocation)
+- EventBridge triggers a cache warmer Lambda daily to fetch TMDB trending and write to S3
+- S3 objects have `Cache-Control: max-age=3600` (1 hour), CloudFront serves `/trending-*.json` from S3
+- Frontend fetches library/request status on login via `/api/library-status`
+- Library status is cached in localStorage and used to hydrate trending/search results with user-specific status
+- This architecture ensures: (a) trending is fast and cheap (pure CDN), (b) private status stays protected, (c) data refreshes daily, cache revalidates hourly

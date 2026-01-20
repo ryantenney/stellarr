@@ -9,10 +9,12 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 - **Sonarr/Radarr Import Lists**: Native JSON formats for direct import
 - **Plex Webhook Integration**: Auto-mark requests as added when Plex downloads media
 - **Library Sync**: Batch sync Plex library to show "In Library" badges
+- **Push Notifications**: Web push alerts when requested media is added to library
 - **Feed Token Protection**: Optional token-based auth for feed endpoints
 - **Missing ID Warnings**: UI indicators when external IDs (IMDB/TVDB) are missing
 - **Large Series Warnings**: Visual indicator for TV shows with 7+ seasons
 - **PWA Support**: Install as app on iOS/Android with proper icons
+- **Localization**: English, Spanish, French, German (auto-detects browser language)
 - **Modern UI**: Svelte-based responsive frontend with mobile optimizations
 - **Multiple Deployment Options**:
   - Docker Compose with Caddy (auto HTTPS)
@@ -108,22 +110,13 @@ A lightweight media request system that generates feeds compatible with Sonarr a
    terraform apply
    ```
 
-3. Deploy frontend to S3:
+3. Deploy application:
    ```bash
-   cd ../frontend
-   npm install && npm run build
-   aws s3 sync build/ s3://$(terraform -chdir=../terraform output -raw frontend_bucket_name)
-   aws cloudfront create-invalidation \
-     --distribution-id $(terraform -chdir=../terraform output -raw cloudfront_distribution_id) \
-     --paths "/*"
-   ```
-
-4. Deploy backend to Lambda:
-   ```bash
-   cd ../backend-lambda
-   ./deploy.sh \
-     $(terraform -chdir=../terraform output -raw lambda_function_name) \
-     $(terraform -chdir=../terraform output -raw lambda_deployment_bucket)
+   cd ..
+   ./deploy.sh              # Deploy everything (terraform, backend, frontend)
+   ./deploy.sh --skip-tf    # Skip terraform, deploy backend + frontend only
+   ./deploy.sh --backend    # Backend Lambda only
+   ./deploy.sh --frontend   # Frontend + CloudFront invalidation only
    ```
 
 ### AWS Cost Estimate
@@ -177,12 +170,13 @@ Items missing these IDs will show a warning indicator and won't appear in the re
 | `/api/auth/params` | GET | Get PBKDF2 iterations for login |
 | `/api/auth/verify` | POST | Verify password, returns session token |
 | `/api/search` | POST | Search TMDB |
-| `/api/trending` | GET | Get trending media (cached 1hr via CloudFront) |
+| `/api/library-status` | GET | Get library IDs and pending requests |
 | `/api/request` | POST | Add a request |
 | `/api/request/{type}/{id}` | DELETE | Remove a request |
 | `/api/requests` | GET | List all requests |
 | `/api/feeds` | GET | Get feed URLs and setup info |
 | `/api/health` | GET | Health check |
+| `/trending-{type}-{locale}.json` | GET | Trending media (static S3, 1hr cache) |
 
 ### Feed Endpoints
 
@@ -259,7 +253,7 @@ overseer-lite/
 | `FEED_TOKEN` | Token for feed endpoint auth | No |
 | `PLEX_WEBHOOK_TOKEN` | Token for Plex webhook/sync endpoints | No |
 | `PLEX_SERVER_NAME` | Filter webhooks to specific Plex server | No |
-| `TVDB_API_KEY` | TVDB API key (for episode→show resolution) | No |
+| `TVDB_API_KEY` | TVDB API key (resolves episode webhooks to parent show) | No |
 | `DOMAIN` | Your domain (for HTTPS) | Production |
 
 ## Security
