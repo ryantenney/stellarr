@@ -97,6 +97,27 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
   })
 }
 
+# S3 access policy for cache warmer to write trending data
+resource "aws_iam_role_policy" "lambda_trending_s3" {
+  name = "${local.name_prefix}-lambda-trending-s3"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.trending.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
 # Lambda Layer for heavy dependencies (cryptography)
 # Only loaded when push notifications are sent (webhook handler)
 resource "aws_lambda_layer_version" "deps" {
@@ -194,12 +215,12 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
 # =============================================================================
 # EventBridge Rule for Trending Cache Warming
-# Triggers the API every 24 hours to keep CloudFront cache warm
+# Fetches trending data from TMDB and writes to S3 daily
 # =============================================================================
 
 resource "aws_cloudwatch_event_rule" "trending_cache_warmer" {
   name                = "${local.name_prefix}-trending-cache-warmer"
-  description         = "Trigger trending API to warm CloudFront cache"
+  description         = "Fetch trending data from TMDB and write to S3"
   schedule_expression = "rate(24 hours)"
 
   tags = {
@@ -214,15 +235,15 @@ resource "aws_cloudwatch_event_target" "trending_cache_warmer" {
 }
 
 # Separate lightweight Lambda for cache warming
-# Uses the main API Lambda code but invoked with specific event
+# Fetches trending data from TMDB and writes to S3
 resource "aws_lambda_function" "cache_warmer" {
   function_name = "${local.name_prefix}-cache-warmer"
   role          = aws_iam_role.lambda.arn
   handler       = "cache_warmer.handler"
   runtime       = "python3.12"
   architectures = ["arm64"]
-  timeout       = 60  # Needs time to fetch trending + TMDB lookups
-  memory_size   = 256  # Minimal memory needed
+  timeout       = 60  # Needs time to fetch trending from TMDB
+  memory_size   = 128
 
   # Placeholder - will be updated by CI/CD
   filename         = data.archive_file.lambda_placeholder.output_path
@@ -230,10 +251,9 @@ resource "aws_lambda_function" "cache_warmer" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE  = aws_dynamodb_table.requests.name
-      APP_SECRET_ARN  = aws_secretsmanager_secret.app_config.arn
-      AWS_REGION_NAME = var.aws_region
-      BASE_URL        = "https://${var.domain_name}"
+      APP_SECRET_ARN    = aws_secretsmanager_secret.app_config.arn
+      AWS_REGION_NAME   = var.aws_region
+      TRENDING_S3_BUCKET = aws_s3_bucket.trending.id
     }
   }
 

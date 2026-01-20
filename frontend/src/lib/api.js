@@ -1,4 +1,4 @@
-import { getSessionToken, getUserName, logout, getTrendingKey } from './stores.js';
+import { getSessionToken, getUserName, logout } from './stores.js';
 
 const API_BASE = '/api';
 
@@ -129,16 +129,15 @@ export async function search(query, mediaType = null, page = 1) {
 }
 
 export async function getTrending(mediaType = 'all') {
-	// Trending endpoint is now public but requires the trending key
-	const key = getTrendingKey();
-	if (!key) {
-		// Return empty results if no key available yet
-		// (library-status will populate the key, then caller can retry)
-		return { results: [] };
-	}
+	// Trending data is served as static JSON files from S3 via CloudFront
+	// No authentication required - this is public TMDB data
+	// Files are locale-specific: trending-all-en.json, trending-movie-fr.json, etc.
+	const locale = localStorage.getItem('locale') || navigator.language.split('-')[0] || 'en';
+	// Fallback to 'en' if locale not in supported list
+	const supportedLocales = ['en', 'es', 'fr', 'de'];
+	const effectiveLocale = supportedLocales.includes(locale) ? locale : 'en';
 
-	// Direct fetch without auth header (public endpoint)
-	const response = await fetch(`${API_BASE}/trending?media_type=${mediaType}&key=${key}`);
+	const response = await fetch(`/trending-${mediaType}-${effectiveLocale}.json`);
 
 	if (!response.ok) {
 		const error = await response.json().catch(() => ({ detail: 'Request failed' }));

@@ -127,7 +127,7 @@ export function addToast(message, type = 'info', duration = 3000) {
 // Library Status Store - Cached library and request state for fast hydration
 // =============================================================================
 
-// Shape: { library: {movie: [], tv: []}, requests: [], trendingKey: string, timestamp: number }
+// Shape: { library: {movie: [], tv: []}, requests: [], timestamp: number }
 function loadLibraryStatus() {
 	if (!browser) return null;
 
@@ -151,7 +151,6 @@ function loadLibraryStatus() {
 const initialLibraryStatus = loadLibraryStatus() || {
 	library: { movie: [], tv: [] },
 	requests: [],
-	trendingKey: null,
 	timestamp: 0
 };
 
@@ -171,24 +170,8 @@ export function updateLibraryStatus(data) {
 	libraryStatus.set({
 		library: data.library || { movie: [], tv: [] },
 		requests: data.requests || [],
-		trendingKey: data.trending_key || null,
 		timestamp: Date.now()
 	});
-}
-
-// Get trending key from store
-export function getTrendingKey() {
-	if (!browser) return null;
-
-	const data = localStorage.getItem('library_status');
-	if (!data) return null;
-
-	try {
-		const parsed = JSON.parse(data);
-		return parsed.trendingKey || null;
-	} catch {
-		return null;
-	}
 }
 
 // Derived store: Set of library TMDB IDs for fast lookup
@@ -233,6 +216,19 @@ export function addToRequestsOptimistic(tmdbId, mediaType, title) {
 	});
 }
 
+// Remove an item from requests optimistically
+export function removeFromRequestsOptimistic(tmdbId, mediaType) {
+	libraryStatus.update((status) => {
+		return {
+			...status,
+			requests: status.requests.filter(
+				(r) => !(Number(r.tmdb_id) === Number(tmdbId) && r.media_type === mediaType)
+			),
+			timestamp: Date.now()
+		};
+	});
+}
+
 // Clear library status on logout
 export function clearLibraryStatus() {
 	if (browser) {
@@ -241,7 +237,6 @@ export function clearLibraryStatus() {
 	libraryStatus.set({
 		library: { movie: [], tv: [] },
 		requests: [],
-		trendingKey: null,
 		timestamp: 0
 	});
 }
