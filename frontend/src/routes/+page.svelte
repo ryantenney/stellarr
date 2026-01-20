@@ -13,6 +13,7 @@
 		addToRequestsOptimistic
 	} from '$lib/stores.js';
 	import { verifyPassword, search, getTrending, addRequest, getLibraryStatus, warmup } from '$lib/api.js';
+	import { lazyload } from '$lib/lazyload.js';
 
 	let password = '';
 	let userName = '';
@@ -100,10 +101,6 @@
 		loadMoreObserver.observe(loadMoreTrigger);
 	}
 
-	// Reactively load trending when trendingKey becomes available (from layout's library-status fetch)
-	$: if ($authenticated && $libraryStatus.trendingKey && !trendingLoaded && trendingResults.length === 0) {
-		loadTrending();
-	}
 
 	// Hydrate a single item with library/request status from stores
 	function hydrateItem(item) {
@@ -115,8 +112,9 @@
 	}
 
 	// Reactive: compute hydrated results when source data or stores change
-	$: hydratedTrending = trendingResults.map(hydrateItem);
-	$: hydratedSearch = searchResults.map(hydrateItem);
+	// Explicitly reference $requestsMap and $librarySet to trigger re-hydration when they change
+	$: hydratedTrending = (($requestsMap, $librarySet), trendingResults.map(hydrateItem));
+	$: hydratedSearch = (($requestsMap, $librarySet), searchResults.map(hydrateItem));
 
 	// Set up resize observer when grid container becomes available
 	$: if (gridContainer && !resizeObserver) {
@@ -325,7 +323,7 @@
 							</div>
 							{#if getPosterUrl(item.poster_path)}
 								<img
-									src={getPosterUrl(item.poster_path)}
+									use:lazyload={getPosterUrl(item.poster_path)}
 									alt={item.title}
 									on:error={handlePosterError}
 								/>

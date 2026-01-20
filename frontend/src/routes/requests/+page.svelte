@@ -1,8 +1,9 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { _ } from 'svelte-i18n';
-	import { authenticated, loading, addToast } from '$lib/stores.js';
+	import { authenticated, loading, addToast, removeFromRequestsOptimistic } from '$lib/stores.js';
 	import { getRequests, removeRequest } from '$lib/api.js';
+	import { lazyload } from '$lib/lazyload.js';
 	import { goto } from '$app/navigation';
 
 	let requests = [];
@@ -102,18 +103,25 @@
 		if (!itemToRemove || removing) return;
 
 		removing = true;
+		const tmdbId = Number(itemToRemove.tmdb_id);
+		const mediaType = itemToRemove.media_type;
+		const title = itemToRemove.title;
+
+		// Optimistic update - remove from both local and global store immediately
+		requests = requests.filter(r => !(Number(r.tmdb_id) === tmdbId && r.media_type === mediaType));
+		removeFromRequestsOptimistic(tmdbId, mediaType);
+		showConfirmModal = false;
+
 		try {
-			await removeRequest(itemToRemove.tmdb_id, itemToRemove.media_type);
-			const tmdbId = Number(itemToRemove.tmdb_id);
-			const mediaType = itemToRemove.media_type;
-			requests = requests.filter(r => !(Number(r.tmdb_id) === tmdbId && r.media_type === mediaType));
-			addToast($_('requests.removed', { values: { title: itemToRemove.title } }), 'success');
-			showConfirmModal = false;
-			itemToRemove = null;
+			await removeRequest(tmdbId, mediaType);
+			addToast($_('requests.removed', { values: { title } }), 'success');
 		} catch (error) {
+			// Revert on failure by reloading
 			addToast($_('removeModal.failed'), 'error');
+			await loadRequests();
 		} finally {
 			removing = false;
+			itemToRemove = null;
 		}
 	}
 
@@ -219,7 +227,7 @@
 				{#each paginatedItems as item (`${item.media_type}-${item.tmdb_id}`)}
 					<div class="request-card" class:has-warning={getMissingIdWarning(item)} class:is-added={item.added_at}>
 						<div class="poster">
-							<img src={getPosterUrl(item.poster_path)} alt={item.title} />
+							<img use:lazyload={getPosterUrl(item.poster_path)} alt={item.title} />
 							<div class="media-type-badge">{item.media_type === 'tv' ? $_('media.tv') : $_('media.movie')}</div>
 							{#if item.added_at}
 								<div class="status-badge in-library" title="{$_('dates.added', { values: { date: formatDate(item.added_at) } })}">{$_('media.inLibrary')}</div>

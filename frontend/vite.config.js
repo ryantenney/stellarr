@@ -3,6 +3,14 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	build: {
+		rollupOptions: {
+			output: {
+				// Bundle all JS into fewer chunks
+				manualChunks: () => 'app'
+			}
+		}
+	},
 	server: {
 		proxy: {
 			'/api': 'http://localhost:8000',

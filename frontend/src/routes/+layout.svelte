@@ -18,14 +18,14 @@
 	let pushLoading = false;
 
 	onMount(() => {
-		// Preload auth params on page load to warm up Lambda
-		preloadAuthParams();
-
-		// If authenticated, fetch library status in background
 		if ($authenticated) {
+			// If authenticated, fetch library status (also warms up Lambda)
 			refreshLibraryStatus();
 			registerServiceWorker();
 			checkPushState();
+		} else {
+			// Preload auth params to warm up Lambda for login
+			preloadAuthParams();
 		}
 	});
 
@@ -268,6 +268,9 @@
 	</style>
 </svelte:head>
 
+{#if $i18nLoading}
+	<div class="app loading-i18n"></div>
+{:else}
 <div class="app">
 	<header>
 		<div class="header-content">
@@ -495,6 +498,7 @@
 		</div>
 	{/if}
 </div>
+{/if}
 
 <style>
 	.app {
@@ -507,6 +511,7 @@
 		background: var(--bg-secondary);
 		border-bottom: 1px solid var(--border);
 		padding: 1rem 2rem;
+		padding-top: calc(1rem + env(safe-area-inset-top, 0px));
 		position: sticky;
 		top: 0;
 		z-index: 100;
