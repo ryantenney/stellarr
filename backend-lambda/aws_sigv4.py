@@ -203,3 +203,144 @@ def get_secret(secret_arn: str, region: str = None) -> dict:
         return json.loads(secret_string)
     else:
         raise ValueError("Secret does not contain a string value")
+
+
+def _sha256_hash_bytes(payload: bytes) -> str:
+    """SHA256 hash of bytes payload."""
+    return hashlib.sha256(payload).hexdigest()
+
+
+def sign_s3_request(
+    method: str,
+    bucket: str,
+    key: str,
+    payload: bytes,
+    region: str,
+    content_type: str = 'application/json',
+    cache_control: str = None,
+) -> tuple[str, dict]:
+    """
+    Sign an S3 API request using SigV4.
+    Returns (url, headers) ready for the request.
+    """
+    # Get credentials from environment
+    access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+    secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    session_token = os.environ.get('AWS_SESSION_TOKEN')
+
+    # Fall back to credentials file for local dev
+    if not access_key or not secret_key:
+        file_access, file_secret, file_token = _get_credentials_from_file()
+        access_key = access_key or file_access
+        secret_key = secret_key or file_secret
+        session_token = session_token or file_token
+
+    if not access_key or not secret_key:
+        raise ValueError("AWS credentials not found")
+
+    host = f"{bucket}.s3.{region}.amazonaws.com"
+    url = f"https://{host}/{key}"
+    canonical_uri = '/' + quote(key, safe='/')
+
+    # Create timestamps
+    t = datetime.now(timezone.utc)
+    amz_date = t.strftime('%Y%m%dT%H%M%SZ')
+    date_stamp = t.strftime('%Y%m%d')
+
+    # Hash the payload
+    payload_hash = _sha256_hash_bytes(payload)
+
+    # Build headers
+    headers = {
+        'host': host,
+        'x-amz-date': amz_date,
+        'x-amz-content-sha256': payload_hash,
+        'content-type': content_type,
+    }
+
+    if cache_control:
+        headers['cache-control'] = cache_control
+
+    if session_token:
+        headers['x-amz-security-token'] = session_token
+
+    # Sort headers for canonical request
+    signed_headers_list = sorted(headers.keys())
+    signed_headers = ';'.join(signed_headers_list)
+
+    canonical_headers = ''
+    for h in signed_headers_list:
+        canonical_headers += f"{h}:{headers[h]}\n"
+
+    # Create canonical request
+    canonical_request = '\n'.join([
+        method,
+        canonical_uri,
+        '',  # No query string
+        canonical_headers,
+        signed_headers,
+        payload_hash
+    ])
+
+    # Create string to sign
+    algorithm = 'AWS4-HMAC-SHA256'
+    credential_scope = f"{date_stamp}/{region}/s3/aws4_request"
+    string_to_sign = '\n'.join([
+        algorithm,
+        amz_date,
+        credential_scope,
+        _sha256_hash(canonical_request)
+    ])
+
+    # Calculate signature
+    signing_key = _get_signature_key(secret_key, date_stamp, region, 's3')
+    signature = hmac.new(signing_key, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    # Create authorization header
+    authorization = (
+        f"{algorithm} "
+        f"Credential={access_key}/{credential_scope}, "
+        f"SignedHeaders={signed_headers}, "
+        f"Signature={signature}"
+    )
+
+    # Build final headers (with proper casing for HTTP)
+    result_headers = {
+        'Host': host,
+        'x-amz-date': amz_date,
+        'x-amz-content-sha256': payload_hash,
+        'Content-Type': content_type,
+        'Authorization': authorization,
+    }
+
+    if cache_control:
+        result_headers['Cache-Control'] = cache_control
+
+    if session_token:
+        result_headers['x-amz-security-token'] = session_token
+
+    return url, result_headers
+
+
+def put_s3_object(bucket: str, key: str, data: bytes, region: str = None,
+                  content_type: str = 'application/json', cache_control: str = None):
+    """
+    Upload an object to S3.
+    """
+    region = region or os.environ.get('AWS_REGION_NAME', 'us-east-1')
+
+    url, headers = sign_s3_request(
+        method='PUT',
+        bucket=bucket,
+        key=key,
+        payload=data,
+        region=region,
+        content_type=content_type,
+        cache_control=cache_control,
+    )
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.put(url, headers=headers, content=data)
+
+    if response.status_code not in (200, 201):
+        raise ValueError(f"S3 PUT error: {response.status_code} - {response.text}")
