@@ -108,7 +108,8 @@ aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
     --s3-bucket "$S3_BUCKET" \
     --s3-key "lambda/overseer-lite.zip" \
-    --region "$REGION"
+    --region "$REGION" \
+    > /dev/null
 
 echo "Waiting for function update..."
 aws lambda wait function-updated --function-name "$FUNCTION_NAME" --region "$REGION"

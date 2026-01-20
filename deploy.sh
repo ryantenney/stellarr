@@ -147,7 +147,18 @@ deploy_backend() {
             --function-name "$CACHE_WARMER_FUNCTION" \
             --s3-bucket "$LAMBDA_BUCKET" \
             --s3-key "lambda/overseer-lite.zip" \
-            --region us-east-1
+            --region us-east-1 \
+            > /dev/null
+
+        # Invoke cache warmer to populate S3 trending data
+        echo "Warming trending cache..."
+        aws lambda invoke \
+            --function-name "$CACHE_WARMER_FUNCTION" \
+            --region us-east-1 \
+            /tmp/cache-warmer-output.json > /dev/null
+        cat /tmp/cache-warmer-output.json
+        rm -f /tmp/cache-warmer-output.json
+        echo ""
     fi
 
     cd "$SCRIPT_DIR"
