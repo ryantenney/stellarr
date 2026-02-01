@@ -26,6 +26,12 @@ from rss import (
     generate_sonarr_json,
 )
 
+# Multi-tenant imports
+from auth import get_session_user_compat, SessionUser
+from auth_routes import router as auth_router
+from tenant_routes import router as tenant_router
+from tenants import init_tenant_tables, migrate_existing_tables, get_tenant_by_webhook_token
+
 
 settings = get_settings()
 
@@ -85,6 +91,15 @@ def verify_session_token(authorization: str | None = Header(None, alias="Authori
 async def lifespan(app: FastAPI):
     """Initialize database on startup."""
     await init_db()
+
+    # Initialize multi-tenant tables if in multi-tenant mode
+    if settings.is_multi_tenant:
+        await init_tenant_tables()
+        await migrate_existing_tables()
+        print("Multi-tenant mode enabled")
+    else:
+        print("Running in single-tenant (legacy) mode")
+
     yield
 
 
@@ -103,6 +118,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include multi-tenant routers
+app.include_router(auth_router)
+app.include_router(tenant_router)
 
 
 # --- Auth Helpers ---
@@ -603,6 +622,129 @@ async def plex_webhook(
         "tmdb_id": result_tmdb_id,
         "added_to_library": added_to_library,
         "matched_request": matched
+    }
+
+
+# --- Multi-Tenant Plex Webhook ---
+
+@app.post("/webhook/plex/{tenant_id}")
+async def plex_webhook_tenant(
+    tenant_id: str,
+    payload: str = Form(...),
+    token: str = Query(..., alias="token")
+):
+    """
+    Handle Plex webhook notifications for a specific tenant (multi-tenant mode).
+
+    Configure in Plex: Settings -> Webhooks -> Add
+    URL: https://your-domain.com/webhook/plex/{tenant_id}?token={webhook_token}
+    """
+    if not settings.is_multi_tenant:
+        raise HTTPException(
+            status_code=400,
+            detail="Multi-tenant webhooks require multi-tenant mode to be enabled"
+        )
+
+    # Verify webhook token belongs to this tenant
+    tenant = await get_tenant_by_webhook_token(token)
+    if not tenant or tenant["id"] != tenant_id:
+        raise HTTPException(status_code=401, detail="Invalid webhook token")
+
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # Check event type - only process library.new
+    event = data.get('event', '')
+    if event != 'library.new':
+        return {"status": "ignored", "reason": f"Event type '{event}' not processed"}
+
+    # Validate server matches tenant's configured server
+    server_id = data.get('Server', {}).get('machineIdentifier', '')
+    if tenant.get('plex_server_id') and server_id != tenant['plex_server_id']:
+        return {"status": "ignored", "reason": "Server mismatch"}
+
+    # Parse the payload
+    from plex import parse_plex_payload
+    media = parse_plex_payload(data)
+
+    if not media:
+        return {"status": "ignored", "reason": "Unsupported media type"}
+
+    # Process webhook with tenant context
+    # For now, use similar logic to legacy webhook but with tenant_id
+    show_tmdb_id = media.tmdb_id
+    show_tvdb_id = media.tvdb_id
+    resolved_from_cache = False
+
+    # For episodes/seasons, check the Plex GUID cache first
+    if media.plex_type in ('episode', 'season') and media.plex_guid:
+        cached = await get_plex_guid_cache(media.plex_guid)
+        if cached:
+            show_tmdb_id = cached.get('tmdb_id')
+            show_tvdb_id = cached.get('tvdb_id')
+            resolved_from_cache = True
+        else:
+            show_tmdb_id = None
+            show_tvdb_id = None
+
+    # Add to library with tenant_id
+    added_to_library = False
+    if show_tmdb_id:
+        import aiosqlite
+        async with aiosqlite.connect(settings.database_path) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO library
+                (tmdb_id, media_type, tvdb_id, title, tenant_id, synced_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (show_tmdb_id, media.media_type, show_tvdb_id, media.title, tenant_id)
+            )
+            await db.commit()
+        added_to_library = True
+
+    # Try to match request with tenant context
+    matched = False
+    import aiosqlite
+    async with aiosqlite.connect(settings.database_path) as db:
+        db.row_factory = aiosqlite.Row
+
+        # Try TMDB ID match
+        if show_tmdb_id:
+            cursor = await db.execute(
+                """
+                UPDATE requests SET added_at = CURRENT_TIMESTAMP
+                WHERE tmdb_id = ? AND media_type = ? AND tenant_id = ? AND added_at IS NULL
+                """,
+                (show_tmdb_id, media.media_type, tenant_id)
+            )
+            await db.commit()
+            matched = cursor.rowcount > 0
+
+        # Try TVDB ID match if TMDB didn't match
+        if not matched and show_tvdb_id and media.media_type == 'tv':
+            cursor = await db.execute(
+                """
+                UPDATE requests SET added_at = CURRENT_TIMESTAMP
+                WHERE tvdb_id = ? AND media_type = ? AND tenant_id = ? AND added_at IS NULL
+                """,
+                (show_tvdb_id, media.media_type, tenant_id)
+            )
+            await db.commit()
+            matched = cursor.rowcount > 0
+
+    result_tmdb_id = show_tmdb_id if show_tmdb_id else media.tmdb_id
+    return {
+        "status": "success",
+        "title": media.title,
+        "media_type": media.media_type,
+        "plex_type": media.plex_type,
+        "tmdb_id": result_tmdb_id,
+        "added_to_library": added_to_library,
+        "matched_request": matched,
+        "tenant_id": tenant_id
     }
 
 
