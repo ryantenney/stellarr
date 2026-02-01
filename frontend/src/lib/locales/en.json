@@ -12,10 +12,12 @@
 		"subtitle": "Enter your name and password to continue",
 		"namePlaceholder": "Your Name",
 		"passwordPlaceholder": "Password",
+		"accessCodePlaceholder": "Access Code",
 		"submit": "Enter",
 		"checking": "Checking...",
 		"enterName": "Please enter your name",
 		"invalidCredentials": "Invalid credentials",
+		"invalidAccessCode": "Invalid access code",
 		"welcome": "Welcome, {name}!"
 	},
 	"search": {

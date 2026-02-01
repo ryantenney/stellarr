@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 
 // Session duration: 30 days in milliseconds
@@ -6,6 +6,88 @@ const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Library status cache duration: 24 hours (match backend trending cache)
 const LIBRARY_STATUS_CACHE_MS = 24 * 60 * 60 * 1000;
+
+// =============================================================================
+// Multi-Tenant Store
+// =============================================================================
+
+// Tenant context - detected from URL or loaded from session
+// Shape: { id, slug, display_name }
+export const tenant = writable(null);
+
+// Whether app is in multi-tenant mode (detected from backend)
+export const multiTenantMode = writable(false);
+
+// User type: 'owner', 'guest', or 'legacy'
+export const userType = writable('legacy');
+
+// Detect tenant from current URL
+export function detectTenantFromUrl() {
+	if (!browser) return null;
+
+	const host = window.location.hostname;
+	const path = window.location.pathname;
+
+	// Check for path-based tenant: /t/{slug}/...
+	const pathMatch = path.match(/^\/t\/([^/]+)/);
+	if (pathMatch) {
+		return { slug: pathMatch[1], source: 'path' };
+	}
+
+	// Check for subdomain tenant: {slug}.domain.com
+	// Skip common non-tenant subdomains and localhost
+	const parts = host.split('.');
+	if (parts.length >= 3 && !host.includes('localhost')) {
+		const subdomain = parts[0];
+		if (!['www', 'app', 'api'].includes(subdomain)) {
+			return { slug: subdomain, source: 'subdomain' };
+		}
+	}
+
+	// Could be a custom domain - will be resolved by backend
+	return null;
+}
+
+// Get the tenant slug from store
+export function getTenantSlug() {
+	const t = get(tenant);
+	return t?.slug || null;
+}
+
+// Get the tenant ID from store
+export function getTenantId() {
+	const t = get(tenant);
+	return t?.id || null;
+}
+
+// Set tenant from login response
+export function setTenant(tenantData) {
+	if (tenantData) {
+		tenant.set(tenantData);
+		if (browser) {
+			localStorage.setItem('tenant', JSON.stringify(tenantData));
+		}
+	}
+}
+
+// Load tenant from localStorage (for page refresh)
+function loadStoredTenant() {
+	if (!browser) return null;
+	try {
+		const data = localStorage.getItem('tenant');
+		return data ? JSON.parse(data) : null;
+	} catch {
+		return null;
+	}
+}
+
+// Initialize tenant from storage
+if (browser) {
+	const storedTenant = loadStoredTenant();
+	if (storedTenant) {
+		tenant.set(storedTenant);
+	}
+}
 
 // Check if session is still valid
 function isSessionValid() {
@@ -86,21 +168,50 @@ if (browser && !storedAuth) {
 }
 
 // Set authenticated state with token and name from backend
-export function setAuthenticated(token, name = null) {
+export function setAuthenticated(token, name = null, type = 'legacy', tenantData = null) {
 	if (browser && token) {
-		const session = { authenticated: true, timestamp: Date.now(), token, name };
+		const session = { authenticated: true, timestamp: Date.now(), token, name, userType: type };
 		localStorage.setItem('auth_session', JSON.stringify(session));
 	}
 	authenticated.set(true);
+	userType.set(type);
+
+	// Set tenant context if provided
+	if (tenantData) {
+		setTenant(tenantData);
+	}
 }
 
-// Logout - clear session and library status
+// Get user type from session
+export function getUserType() {
+	if (!browser) return 'legacy';
+
+	const authData = localStorage.getItem('auth_session');
+	if (!authData) return 'legacy';
+
+	try {
+		const session = JSON.parse(authData);
+		return session.userType || 'legacy';
+	} catch {
+		return 'legacy';
+	}
+}
+
+// Initialize user type from storage
+if (browser && isSessionValid()) {
+	userType.set(getUserType());
+}
+
+// Logout - clear session, library status, and tenant
 export function logout() {
 	if (browser) {
 		localStorage.removeItem('auth_session');
 		localStorage.removeItem('library_status');
+		localStorage.removeItem('tenant');
 	}
 	authenticated.set(false);
+	userType.set('legacy');
+	tenant.set(null);
 }
 
 // Password store (not persisted for security)

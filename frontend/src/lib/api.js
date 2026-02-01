@@ -1,9 +1,14 @@
-import { getSessionToken, getUserName, logout } from './stores.js';
+import { getSessionToken, getUserName, logout, getTenantSlug } from './stores.js';
 
 const API_BASE = '/api';
 
 // Cached auth params (fetched from backend)
 let authParamsCache = null;
+
+// Check if running in multi-tenant mode (cached)
+export function isMultiTenant() {
+	return authParamsCache?.multi_tenant || false;
+}
 
 // Compute SHA256 hash
 async function sha256(message) {
@@ -103,9 +108,17 @@ async function request(endpoint, options = {}, requiresAuth = true) {
 	return response.json();
 }
 
-export async function verifyPassword(password, name) {
-	// Fetch PBKDF2 iterations from backend (single source of truth)
-	const { iterations } = await getAuthParams();
+export async function verifyPassword(password, name, tenantSlug = null) {
+	// Fetch auth params to check if multi-tenant mode
+	const params = await getAuthParams();
+
+	// In multi-tenant mode with a tenant context, use guest login
+	if (params.multi_tenant && tenantSlug) {
+		return loginGuest(tenantSlug, password, name);
+	}
+
+	// Legacy single-tenant mode: use PBKDF2 challenge-response
+	const { iterations } = params;
 
 	// Challenge-response auth with PBKDF2 key derivation
 	const origin = window.location.origin;
@@ -115,10 +128,89 @@ export async function verifyPassword(password, name) {
 	const derivedKey = await pbkdf2DeriveKey(password, origin, iterations);
 	const hash = await sha256(`${derivedKey}:${timestamp}`);
 
-	return request('/auth/verify', {
+	const result = await request('/auth/verify', {
 		method: 'POST',
 		body: JSON.stringify({ origin, timestamp, hash, name })
-	}, false);  // No auth required for login
+	}, false);
+
+	// Return in consistent format with guest login
+	return {
+		token: result.token,
+		name: name,
+		userType: 'legacy',
+		tenant: null
+	};
+}
+
+// Guest login for multi-tenant mode
+export async function loginGuest(tenantSlug, accessCode, displayName = null) {
+	const response = await fetch('/auth/guest', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			tenant_slug: tenantSlug,
+			access_code: accessCode,
+			display_name: displayName
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+		throw new Error(error.detail || 'Invalid access code');
+	}
+
+	const data = await response.json();
+
+	return {
+		token: data.token,
+		name: displayName,
+		userType: 'guest',
+		tenant: data.tenant,
+		guestId: data.guest_id
+	};
+}
+
+// Fetch tenant info by slug (for resolving tenant from URL)
+export async function getTenantInfo(slug) {
+	const response = await fetch(`/auth/tenant/${slug}`);
+	if (!response.ok) {
+		return null;
+	}
+	return response.json();
+}
+
+// --- Plex OAuth (for owners) ---
+
+export async function initPlexLogin() {
+	const response = await fetch('/auth/plex/login');
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: 'Failed to start Plex login' }));
+		throw new Error(error.detail);
+	}
+	return response.json();
+}
+
+export async function pollPlexLogin(pinId) {
+	const response = await fetch(`/auth/plex/poll/${pinId}`);
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: 'Failed to check Plex login' }));
+		throw new Error(error.detail);
+	}
+	return response.json();
+}
+
+export async function completePlexCallback(pinId) {
+	const response = await fetch(`/auth/plex/callback?pin_id=${pinId}`);
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: 'Failed to complete Plex login' }));
+		throw new Error(error.detail);
+	}
+	return response.json();
+}
+
+// Get current user info
+export async function getCurrentUser() {
+	return request('/auth/me', {}, true);
 }
 
 export async function search(query, mediaType = null, page = 1) {

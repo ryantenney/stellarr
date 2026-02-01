@@ -10,10 +10,15 @@
 		requestsMap,
 		libraryStatus,
 		updateLibraryStatus,
-		addToRequestsOptimistic
+		addToRequestsOptimistic,
+		tenant,
+		detectTenantFromUrl
 	} from '$lib/stores.js';
-	import { verifyPassword, search, getTrending, addRequest, getLibraryStatus, warmup } from '$lib/api.js';
+	import { verifyPassword, search, getTrending, addRequest, getLibraryStatus, warmup, preloadAuthParams, isMultiTenant } from '$lib/api.js';
 	import { lazyload } from '$lib/lazyload.js';
+
+	// Tenant context (detected from URL)
+	let detectedTenant = null;
 
 	let password = '';
 	let userName = '';
@@ -82,6 +87,12 @@
 		checkMobile();
 		window.addEventListener('resize', checkMobile);
 
+		// Detect tenant from URL (subdomain, path, or custom domain)
+		detectedTenant = detectTenantFromUrl();
+
+		// Preload auth params to detect multi-tenant mode
+		await preloadAuthParams();
+
 		if ($authenticated) {
 			// Load trending (uses cached key from localStorage if available)
 			await loadTrending();
@@ -146,9 +157,16 @@
 		}
 		try {
 			$loading = true;
-			const response = await verifyPassword(password, userName.trim());
-			setAuthenticated(response.token, response.name);
-			addToast($_('auth.welcome', { values: { name: response.name } }), 'success');
+
+			// In multi-tenant mode with detected tenant, pass the tenant slug
+			const tenantSlug = detectedTenant?.slug || null;
+			const response = await verifyPassword(password, userName.trim(), tenantSlug);
+
+			// Set authenticated with user type and tenant context
+			setAuthenticated(response.token, response.name || userName.trim(), response.userType || 'legacy', response.tenant);
+
+			addToast($_('auth.welcome', { values: { name: response.name || userName.trim() } }), 'success');
+
 			// Fetch library status (gets trending key), then load trending
 			const statusData = await getLibraryStatus();
 			updateLibraryStatus(statusData);
@@ -243,6 +261,9 @@
 	<div class="login-container">
 		<div class="login-card">
 			<h1>🎬 {$_('auth.title')}</h1>
+			{#if detectedTenant}
+				<p class="tenant-name">{$tenant?.display_name || detectedTenant.slug}</p>
+			{/if}
 			<p>{$_('auth.subtitle')}</p>
 			<form on:submit|preventDefault={handleLogin}>
 				<input
@@ -254,7 +275,7 @@
 				<input
 					type="password"
 					bind:value={password}
-					placeholder={$_('auth.passwordPlaceholder')}
+					placeholder={detectedTenant ? $_('auth.accessCodePlaceholder') : $_('auth.passwordPlaceholder')}
 					autocomplete="current-password"
 				/>
 				<button type="submit" disabled={$loading || !userName.trim()}>
@@ -429,6 +450,13 @@
 	.login-card p {
 		color: var(--text-secondary);
 		margin-bottom: 2rem;
+	}
+
+	.login-card .tenant-name {
+		color: var(--accent);
+		font-size: 1.25rem;
+		font-weight: 600;
+		margin-bottom: 0.5rem;
 	}
 
 	.login-card form {
