@@ -1,28 +1,36 @@
+<div align="center">
+
 # Overseer Lite
 
-A lightweight media request system that generates feeds compatible with Sonarr and Radarr. Users can search for TV shows and movies via TMDB and add them to request lists, which are exposed as import list endpoints.
+**A lightweight media request system for Sonarr & Radarr — no open ports required.**
 
-## Features
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![AWS Lambda](https://img.shields.io/badge/AWS-Serverless-FF9900?logo=amazonaws&logoColor=white)](terraform/)
+[![Plex](https://img.shields.io/badge/Plex-Integrated-E5A00D?logo=plex&logoColor=white)](README.md#plex-integration)
 
-- **Simple Authentication**: Preshared password with PBKDF2 key derivation and signed session tokens
-- **TMDB Integration**: Search movies and TV shows using The Movie Database
-- **Sonarr/Radarr Import Lists**: Native JSON formats for direct import
-- **Plex Webhook Integration**: Auto-mark requests as added when Plex downloads media
-- **Library Sync**: Batch sync Plex library to show "In Library" badges
-- **Push Notifications**: Web push alerts when requested media is added to library
-- **Feed Token Protection**: Optional token-based auth for feed endpoints
-- **Missing ID Warnings**: UI indicators when external IDs (IMDB/TVDB) are missing
-- **Large Series Warnings**: Visual indicator for TV shows with 7+ seasons
-- **PWA Support**: Install as app on iOS/Android with proper icons
-- **Localization**: English, Spanish, French, German (auto-detects browser language)
-- **Modern UI**: Svelte-based responsive frontend with mobile optimizations
-- **Multiple Deployment Options**:
-  - Docker Compose with Caddy (auto HTTPS)
-  - AWS Serverless (Lambda + DynamoDB + CloudFront)
+</div>
+
+---
+
+A self-hosted alternative to Overseerr that keeps things simple. Search TMDB for movies and TV shows, add them to request lists, and let Sonarr/Radarr pull them in via native import list endpoints. Deploy with Docker for auto-HTTPS, or go fully serverless on AWS for under a dollar a month.
+
+### Highlights
+
+- **No open ports** — Caddy auto-HTTPS or CloudFront handles TLS, nothing exposed
+- **Native import lists** — Sonarr and Radarr pull directly, no webhooks or middleware
+- **Plex integration** — auto-marks requests as added, syncs "In Library" badges
+- **Push notifications** — web push alerts when requested media lands in your library
+- **PWA support** — installable on iOS and Android with proper icons
+- **Localized** — English, Spanish, French, German (auto-detects browser language)
+- **Two deployment paths** — Docker Compose or AWS serverless (Lambda + DynamoDB + CloudFront)
+
+---
 
 ## Deployment Options
 
-### Option 1: Docker (Recommended for Self-Hosting)
+<details>
+<summary><strong>Architecture: Docker (Recommended for Self-Hosting)</strong></summary>
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -38,7 +46,10 @@ A lightweight media request system that generates feeds compatible with Sonarr a
                                         └─────────────┘
 ```
 
-### Option 2: AWS Serverless (Low Cost)
+</details>
+
+<details>
+<summary><strong>Architecture: AWS Serverless (Low Cost)</strong></summary>
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -55,9 +66,11 @@ A lightweight media request system that generates feeds compatible with Sonarr a
                                         └─────────────┘
 ```
 
-**AWS Cost: ~$0.50-1/month** (mostly Secrets Manager + Route53)
+</details>
 
-## Quick Start (Docker)
+---
+
+## Quick Start: Docker
 
 ### Prerequisites
 
@@ -85,7 +98,9 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 
 3. Access at `http://localhost` or `https://your-domain.com`
 
-## AWS Serverless Deployment
+---
+
+## Quick Start: AWS Serverless
 
 ### Prerequisites
 
@@ -131,6 +146,8 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 | Route53 | ~$0.50 (hosted zone) |
 | **Total** | **~$0.50-1/month** |
 
+---
+
 ## Import Lists for Sonarr/Radarr
 
 ### Radarr (Movies)
@@ -155,7 +172,7 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 
 If `FEED_TOKEN` is set, append `?token=YOUR_TOKEN` to feed URLs.
 
-## External ID Handling
+### External ID Handling
 
 The application fetches external IDs from TMDB when items are requested:
 - **Movies**: IMDB ID (for Radarr)
@@ -163,7 +180,52 @@ The application fetches external IDs from TMDB when items are requested:
 
 Items missing these IDs will show a warning indicator and won't appear in the respective feeds.
 
-## API Endpoints
+---
+
+## Plex Integration
+
+### Webhook Setup
+
+Configure Plex to send webhooks when new media is added:
+
+1. In Plex: Settings → Webhooks → Add Webhook
+2. URL: `https://your-domain.com/webhook/plex?token=YOUR_PLEX_WEBHOOK_TOKEN`
+3. Overseer will auto-mark matching requests as "Added"
+
+The webhook also adds items to the library table, enabling "In Library" badges on search results.
+
+### Library Sync Script
+
+For initial library population, use the sync script on your Plex server:
+
+```bash
+cd scripts
+pip install -r requirements.txt
+python plex-sync.py \
+  --plex-url http://localhost:32400 \
+  --plex-token YOUR_PLEX_TOKEN \
+  --overseer-url https://your-domain.com \
+  --sync-token YOUR_PLEX_WEBHOOK_TOKEN
+```
+
+This syncs all movies and TV shows from Plex, enabling "In Library" badges even for items added before the webhook was configured.
+
+---
+
+## Security
+
+- **HTTPS everywhere** — TLS 1.2+ enforced via CloudFront
+- **Signed session tokens** — HMAC-SHA256 with 30-day expiry
+- **Secrets Manager** — API keys stored securely
+- **Private S3** — Frontend only accessible via CloudFront
+- **WAF (optional)** — Rate limiting and threat protection (~$8/month extra)
+
+---
+
+<details>
+<summary><strong>API Reference</strong></summary>
+
+### Core Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -195,35 +257,26 @@ Items missing these IDs will show a warning indicator and won't appear in the re
 | `/webhook/plex?token=XXX` | POST | Plex webhook - marks requests as added |
 | `/sync/library?media_type=movie&token=XXX` | POST | Bulk sync library items |
 
-## Plex Integration
+</details>
 
-### Webhook Setup
+<details>
+<summary><strong>Environment Variables</strong></summary>
 
-Configure Plex to send webhooks when new media is added:
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `APP_SECRET_KEY` | Application secret key | Yes |
+| `PRESHARED_PASSWORD` | User access password | Yes |
+| `TMDB_API_KEY` | TMDB API key | Yes |
+| `FEED_TOKEN` | Token for feed endpoint auth | No |
+| `PLEX_WEBHOOK_TOKEN` | Token for Plex webhook/sync endpoints | No |
+| `PLEX_SERVER_NAME` | Filter webhooks to specific Plex server | No |
+| `TVDB_API_KEY` | TVDB API key (resolves episode webhooks to parent show) | No |
+| `DOMAIN` | Your domain (for HTTPS) | Production |
 
-1. In Plex: Settings → Webhooks → Add Webhook
-2. URL: `https://your-domain.com/webhook/plex?token=YOUR_PLEX_WEBHOOK_TOKEN`
-3. Overseer will auto-mark matching requests as "Added"
+</details>
 
-The webhook also adds items to the library table, enabling "In Library" badges on search results.
-
-### Library Sync Script
-
-For initial library population, use the sync script on your Plex server:
-
-```bash
-cd scripts
-pip install -r requirements.txt
-python plex-sync.py \
-  --plex-url http://localhost:32400 \
-  --plex-token YOUR_PLEX_TOKEN \
-  --overseer-url https://your-domain.com \
-  --sync-token YOUR_PLEX_WEBHOOK_TOKEN
-```
-
-This syncs all movies and TV shows from Plex, enabling "In Library" badges even for items added before the webhook was configured.
-
-## Project Structure
+<details>
+<summary><strong>Project Structure</strong></summary>
 
 ```
 overseer-lite/
@@ -243,28 +296,10 @@ overseer-lite/
 └── docker-compose.prod.yml
 ```
 
-## Environment Variables
+</details>
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `APP_SECRET_KEY` | Application secret key | Yes |
-| `PRESHARED_PASSWORD` | User access password | Yes |
-| `TMDB_API_KEY` | TMDB API key | Yes |
-| `FEED_TOKEN` | Token for feed endpoint auth | No |
-| `PLEX_WEBHOOK_TOKEN` | Token for Plex webhook/sync endpoints | No |
-| `PLEX_SERVER_NAME` | Filter webhooks to specific Plex server | No |
-| `TVDB_API_KEY` | TVDB API key (resolves episode webhooks to parent show) | No |
-| `DOMAIN` | Your domain (for HTTPS) | Production |
-
-## Security
-
-- **HTTPS everywhere** - TLS 1.2+ enforced via CloudFront
-- **Signed session tokens** - HMAC-SHA256 with 30-day expiry
-- **Secrets Manager** - API keys stored securely
-- **Private S3** - Frontend only accessible via CloudFront
-- **WAF (optional)** - Rate limiting and threat protection (~$8/month extra)
-
-## Feed Format Details
+<details>
+<summary><strong>Feed Format Details</strong></summary>
 
 ### Radarr JSON (StevenLu Custom)
 ```json
@@ -281,6 +316,10 @@ overseer-lite/
   {"tvdbId": "77847"}
 ]
 ```
+
+</details>
+
+---
 
 ## Sources
 

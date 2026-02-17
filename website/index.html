@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stellarr - Simple Media Requests for Sonarr & Radarr</title>
+  <meta name="description" content="A lightweight alternative to Overseerr that doesn't require open ports. Integrates with Sonarr, Radarr, and Plex. Self-host with Docker or deploy serverless on AWS.">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta property="og:title" content="Stellarr - Simple Media Requests">
+  <meta property="og:description" content="A sleek, modern media request system for Sonarr, Radarr, and Plex.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://stellar.dev">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Starfield canvas -->
+  <canvas id="starfield"></canvas>
+
+  <!-- Navigation -->
+  <nav class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <svg class="nav-logo-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="20" cy="20" r="18" stroke="url(#logo-grad)" stroke-width="2.5"/>
+          <circle cx="20" cy="20" r="8" fill="url(#logo-grad)"/>
+          <circle cx="20" cy="20" r="13" stroke="url(#logo-grad)" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.6"/>
+          <circle cx="20" cy="8" r="2.5" fill="#a78bfa"/>
+          <circle cx="31" cy="25" r="2" fill="#818cf8"/>
+          <circle cx="11" cy="28" r="1.5" fill="#c4b5fd"/>
+          <defs>
+            <linearGradient id="logo-grad" x1="0" y1="0" x2="40" y2="40">
+              <stop offset="0%" stop-color="#818cf8"/>
+              <stop offset="100%" stop-color="#a78bfa"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="nav-logo-text">Stellarr</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#how-it-works" class="nav-link">How It Works</a>
+        <a href="#deploy" class="nav-link">Deploy</a>
+        <a href="https://github.com/ryantenney/overseer-lite" class="nav-link" target="_blank" rel="noopener">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        </a>
+      </div>
+      <button class="nav-mobile-toggle" id="mobile-toggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="nav-mobile" id="mobile-menu">
+      <a href="#features" class="nav-mobile-link">Features</a>
+      <a href="#how-it-works" class="nav-mobile-link">How It Works</a>
+      <a href="#deploy" class="nav-mobile-link">Deploy</a>
+      <a href="https://github.com/ryantenney/overseer-lite" class="nav-mobile-link" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-content">
+      <h1 class="hero-title" data-animate="fade-up">
+        Simple Media<br>
+        <span class="hero-title-gradient">Request Management</span>
+      </h1>
+      <p class="hero-subtitle" data-animate="fade-up" data-delay="100">
+        A lightweight alternative to Overseerr that doesn't require any open ports on your network.
+        Integrates seamlessly with Sonarr, Radarr, and Plex.
+      </p>
+      <div class="hero-actions" data-animate="fade-up" data-delay="200">
+        <a href="#deploy" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Get Started
+        </a>
+        <a href="https://github.com/ryantenney/overseer-lite" class="btn btn-ghost" target="_blank" rel="noopener">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="hero-stats" data-animate="fade-up" data-delay="300">
+        <div class="hero-stat">
+          <span class="hero-stat-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+          </span>
+          Serverless
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <span class="hero-stat-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </span>
+          Lightning Fast
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <span class="hero-stat-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          </span>
+          No Open Ports
+        </div>
+      </div>
+    </div>
+
+    <!-- Hero mockup -->
+    <div class="hero-mockup" data-animate="fade-up" data-delay="400">
+      <div class="mockup-browser">
+        <div class="mockup-browser-bar">
+          <div class="mockup-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="mockup-url">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            stellar.dev
+          </div>
+        </div>
+        <div class="mockup-screen">
+          <div class="mockup-sidebar">
+            <div class="mockup-sidebar-logo"></div>
+            <div class="mockup-sidebar-item active"></div>
+            <div class="mockup-sidebar-item"></div>
+            <div class="mockup-sidebar-item"></div>
+          </div>
+          <div class="mockup-main">
+            <div class="mockup-search">
+              <div class="mockup-search-icon"></div>
+              <div class="mockup-search-text"></div>
+            </div>
+            <div class="mockup-heading"></div>
+            <div class="mockup-grid">
+              <div class="mockup-card"><div class="mockup-card-img c1"></div><div class="mockup-card-title"></div><div class="mockup-card-sub"></div></div>
+              <div class="mockup-card"><div class="mockup-card-img c2"></div><div class="mockup-card-title"></div><div class="mockup-card-sub"></div></div>
+              <div class="mockup-card"><div class="mockup-card-img c3"></div><div class="mockup-card-title"></div><div class="mockup-card-sub"></div></div>
+              <div class="mockup-card"><div class="mockup-card-img c4"></div><div class="mockup-card-title"></div><div class="mockup-card-sub"></div></div>
+              <div class="mockup-card"><div class="mockup-card-img c5"></div><div class="mockup-card-title"></div><div class="mockup-card-sub"></div></div>
+              <div class="mockup-card"><div class="mockup-card-img c6"></div><div class="mockup-card-title"></div><div class="mockup-card-sub"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Logos / Integrations bar -->
+  <section class="integrations">
+    <div class="container">
+      <p class="integrations-label" data-animate="fade-up">Integrates with your favorite tools</p>
+      <div class="integrations-grid" data-animate="fade-up" data-delay="100">
+        <div class="integration-item">
+          <svg viewBox="0 0 60 60" class="integration-icon"><circle cx="30" cy="30" r="24" fill="#ffc107" opacity="0.15"/><text x="30" y="36" text-anchor="middle" font-size="18" font-weight="700" fill="#ffc107">R</text></svg>
+          <span>Radarr</span>
+        </div>
+        <div class="integration-item">
+          <svg viewBox="0 0 60 60" class="integration-icon"><circle cx="30" cy="30" r="24" fill="#35c5f4" opacity="0.15"/><text x="30" y="36" text-anchor="middle" font-size="18" font-weight="700" fill="#35c5f4">S</text></svg>
+          <span>Sonarr</span>
+        </div>
+        <div class="integration-item">
+          <svg viewBox="0 0 60 60" class="integration-icon"><circle cx="30" cy="30" r="24" fill="#e5a00d" opacity="0.15"/><text x="30" y="36" text-anchor="middle" font-size="18" font-weight="700" fill="#e5a00d">P</text></svg>
+          <span>Plex</span>
+        </div>
+        <div class="integration-item">
+          <svg viewBox="0 0 60 60" class="integration-icon"><circle cx="30" cy="30" r="24" fill="#2496ed" opacity="0.15"/><text x="30" y="36" text-anchor="middle" font-size="18" font-weight="700" fill="#2496ed">D</text></svg>
+          <span>Docker</span>
+        </div>
+        <div class="integration-item">
+          <svg viewBox="0 0 60 60" class="integration-icon"><circle cx="30" cy="30" r="24" fill="#ff9900" opacity="0.15"/><text x="30" y="36" text-anchor="middle" font-size="18" font-weight="700" fill="#ff9900">A</text></svg>
+          <span>AWS</span>
+        </div>
+        <div class="integration-item">
+          <svg viewBox="0 0 60 60" class="integration-icon"><circle cx="30" cy="30" r="24" fill="#4fc08d" opacity="0.15"/><text x="30" y="36" text-anchor="middle" font-size="18" font-weight="700" fill="#4fc08d">T</text></svg>
+          <span>TMDB</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header" data-animate="fade-up">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Everything you need,<br>nothing you don't</h2>
+        <p class="section-desc">Stellarr is designed to be simple yet powerful. No bloat, no complexity &mdash; just a clean interface for managing media requests.</p>
+      </div>
+
+      <!-- Feature cards - big 3 -->
+      <div class="features-showcase">
+        <div class="feature-showcase-card" data-animate="fade-up">
+          <div class="feature-showcase-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="url(#feat1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <defs><linearGradient id="feat1" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs>
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </div>
+          <h3 class="feature-showcase-title">Discover & Request</h3>
+          <p class="feature-showcase-desc">Search TMDB's massive catalog of movies and TV shows. Browse trending content, request with one click, and track everything in a beautiful interface.</p>
+        </div>
+
+        <div class="feature-showcase-card" data-animate="fade-up" data-delay="100">
+          <div class="feature-showcase-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="url(#feat2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <defs><linearGradient id="feat2" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs>
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+            </svg>
+          </div>
+          <h3 class="feature-showcase-title">Automatic Fulfillment</h3>
+          <p class="feature-showcase-desc">Native import lists for Sonarr and Radarr mean your requests are automatically picked up and downloaded. No manual intervention required.</p>
+        </div>
+
+        <div class="feature-showcase-card" data-animate="fade-up" data-delay="200">
+          <div class="feature-showcase-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="url(#feat3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <defs><linearGradient id="feat3" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs>
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <h3 class="feature-showcase-title">Plex Integration</h3>
+          <p class="feature-showcase-desc">Webhooks automatically track when requested media arrives in your Plex library. Users get push notifications when their shows and movies are ready.</p>
+        </div>
+      </div>
+
+      <!-- Feature grid - details -->
+      <div class="features-grid">
+        <div class="feature-card" data-animate="fade-up">
+          <div class="feature-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h4 class="feature-card-title">Progressive Web App</h4>
+          <p class="feature-card-desc">Install on any device. Works beautifully on phones, tablets, and desktops with native app-like experience.</p>
+        </div>
+
+        <div class="feature-card" data-animate="fade-up" data-delay="50">
+          <div class="feature-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h4 class="feature-card-title">Secure by Default</h4>
+          <p class="feature-card-desc">Client-side key derivation with PBKDF2. Your password never leaves the browser. HMAC-signed session tokens.</p>
+        </div>
+
+        <div class="feature-card" data-animate="fade-up" data-delay="100">
+          <div class="feature-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          </div>
+          <h4 class="feature-card-title">Multilingual</h4>
+          <p class="feature-card-desc">Built-in support for English, Spanish, French, and German with automatic browser language detection.</p>
+        </div>
+
+        <div class="feature-card" data-animate="fade-up" data-delay="150">
+          <div class="feature-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <h4 class="feature-card-title">RSS Feeds</h4>
+          <p class="feature-card-desc">Native RSS and JSON import list endpoints. Works out of the box with Sonarr and Radarr list imports.</p>
+        </div>
+
+        <div class="feature-card" data-animate="fade-up" data-delay="200">
+          <div class="feature-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          </div>
+          <h4 class="feature-card-title">Lightweight</h4>
+          <p class="feature-card-desc">Static SvelteKit frontend with a lean Python backend. No Node.js runtime needed in production. Tiny resource footprint.</p>
+        </div>
+
+        <div class="feature-card" data-animate="fade-up" data-delay="250">
+          <div class="feature-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <h4 class="feature-card-title">Push Notifications</h4>
+          <p class="feature-card-desc">Get notified instantly when your requested media is added to the library via web push notifications.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it Works -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header" data-animate="fade-up">
+        <span class="section-label">How It Works</span>
+        <h2 class="section-title">From request to<br>your screen in minutes</h2>
+      </div>
+      <div class="steps">
+        <div class="step" data-animate="fade-up">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3 class="step-title">Search & Request</h3>
+            <p class="step-desc">Users search TMDB's catalog and request movies or TV shows with a single click. Browse trending content or search for anything.</p>
+          </div>
+        </div>
+        <div class="step-connector" data-animate="fade-up" data-delay="50">
+          <svg width="24" height="60" viewBox="0 0 24 60"><path d="M12 0 L12 60" stroke="url(#conn-grad)" stroke-width="2" stroke-dasharray="4 4" fill="none"/><defs><linearGradient id="conn-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#a78bfa" stop-opacity="0.3"/></linearGradient></defs></svg>
+        </div>
+        <div class="step" data-animate="fade-up" data-delay="100">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3 class="step-title">Automatic Pickup</h3>
+            <p class="step-desc">Sonarr and Radarr import lists automatically detect new requests. Media is fetched, downloaded, and organized without any manual steps.</p>
+          </div>
+        </div>
+        <div class="step-connector" data-animate="fade-up" data-delay="150">
+          <svg width="24" height="60" viewBox="0 0 24 60"><path d="M12 0 L12 60" stroke="url(#conn-grad2)" stroke-width="2" stroke-dasharray="4 4" fill="none"/><defs><linearGradient id="conn-grad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0.3"/></linearGradient></defs></svg>
+        </div>
+        <div class="step" data-animate="fade-up" data-delay="200">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3 class="step-title">Watch & Enjoy</h3>
+            <p class="step-desc">Plex webhooks notify Stellarr when media arrives. Users get push notifications and can start watching immediately.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Deploy -->
+  <section class="deploy" id="deploy">
+    <div class="container">
+      <div class="section-header" data-animate="fade-up">
+        <span class="section-label">Deployment</span>
+        <h2 class="section-title">Deploy your way</h2>
+        <p class="section-desc">Choose the deployment that fits your setup. Both options give you the full Stellarr experience.</p>
+      </div>
+
+      <div class="deploy-options">
+        <div class="deploy-card" data-animate="fade-up">
+          <div class="deploy-card-header">
+            <div class="deploy-card-icon docker">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="3"/><rect x="6" y="6" width="4" height="4" rx="1"/><rect x="14" y="6" width="4" height="4" rx="1"/><rect x="6" y="14" width="4" height="4" rx="1"/><rect x="14" y="14" width="4" height="4" rx="1"/></svg>
+            </div>
+            <h3 class="deploy-card-title">Docker</h3>
+            <span class="deploy-card-badge">Self-Hosted</span>
+          </div>
+          <p class="deploy-card-desc">Run on your own hardware with Docker Compose. SQLite database, Caddy reverse proxy with automatic HTTPS. Full control, zero cloud costs.</p>
+          <div class="deploy-card-code">
+            <code>docker compose up -d</code>
+          </div>
+          <ul class="deploy-card-features">
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              One-command setup
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Auto HTTPS with Caddy
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              SQLite &mdash; no database server
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Zero ongoing costs
+            </li>
+          </ul>
+        </div>
+
+        <div class="deploy-card featured" data-animate="fade-up" data-delay="100">
+          <div class="deploy-card-glow"></div>
+          <div class="deploy-card-header">
+            <div class="deploy-card-icon aws">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <h3 class="deploy-card-title">AWS Serverless</h3>
+            <span class="deploy-card-badge">Cloud</span>
+          </div>
+          <p class="deploy-card-desc">Deploy to AWS Lambda with DynamoDB, CloudFront CDN, and S3. Scales automatically, costs under $1/month. Infrastructure as code with Terraform.</p>
+          <div class="deploy-card-code">
+            <code>terraform apply</code>
+          </div>
+          <ul class="deploy-card-features">
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Auto-scaling, zero maintenance
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              CloudFront CDN globally
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              DynamoDB on-demand pricing
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              ~$0.50/month typical cost
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div class="container">
+      <div class="cta-inner" data-animate="fade-up">
+        <div class="cta-glow"></div>
+        <h2 class="cta-title">Ready to launch?</h2>
+        <p class="cta-desc">Get Stellarr running and start managing media requests with style.</p>
+        <div class="cta-actions">
+          <a href="https://github.com/ryantenney/overseer-lite" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+            View on GitHub
+          </a>
+          <a href="https://github.com/ryantenney/overseer-lite#quick-start" class="btn btn-ghost btn-lg" target="_blank" rel="noopener">
+            Read the Docs
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <a href="#" class="nav-logo">
+            <svg class="nav-logo-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="20" cy="20" r="18" stroke="url(#logo-grad-f)" stroke-width="2.5"/>
+              <circle cx="20" cy="20" r="8" fill="url(#logo-grad-f)"/>
+              <circle cx="20" cy="20" r="13" stroke="url(#logo-grad-f)" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.6"/>
+              <circle cx="20" cy="8" r="2.5" fill="#a78bfa"/>
+              <circle cx="31" cy="25" r="2" fill="#818cf8"/>
+              <circle cx="11" cy="28" r="1.5" fill="#c4b5fd"/>
+              <defs>
+                <linearGradient id="logo-grad-f" x1="0" y1="0" x2="40" y2="40">
+                  <stop offset="0%" stop-color="#818cf8"/>
+                  <stop offset="100%" stop-color="#a78bfa"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <span class="nav-logo-text">Stellarr</span>
+          </a>
+          <p class="footer-tagline">Simple media request management.</p>
+        </div>
+        <div class="footer-links">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#deploy">Deployment</a>
+          </div>
+          <div class="footer-col">
+            <h4>Community</h4>
+            <a href="https://github.com/ryantenney/overseer-lite" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/ryantenney/overseer-lite/issues" target="_blank" rel="noopener">Issues</a>
+            <a href="https://github.com/ryantenney/overseer-lite/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+          </div>
+          <div class="footer-col">
+            <h4>Resources</h4>
+            <a href="https://github.com/ryantenney/overseer-lite#quick-start" target="_blank" rel="noopener">Documentation</a>
+            <a href="https://github.com/ryantenney/overseer-lite/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Stellarr. Open source under MIT License.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
