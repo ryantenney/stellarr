@@ -149,7 +149,7 @@ data "archive_file" "layer_placeholder" {
 resource "aws_lambda_function" "api" {
   function_name = "${local.name_prefix}-api"
   role          = aws_iam_role.lambda.arn
-  handler       = "main.handler"
+  handler       = "providers.aws.handler.handler"
   runtime       = "python3.12"
   architectures = ["arm64"]  # Graviton2 - faster and 20% cheaper
   timeout       = var.lambda_timeout
@@ -239,7 +239,7 @@ resource "aws_cloudwatch_event_target" "trending_cache_warmer" {
 resource "aws_lambda_function" "cache_warmer" {
   function_name = "${local.name_prefix}-cache-warmer"
   role          = aws_iam_role.lambda.arn
-  handler       = "cache_warmer.handler"
+  handler       = "providers.aws.cache_warmer.handler"
   runtime       = "python3.12"
   architectures = ["arm64"]
   timeout       = 60  # Needs time to fetch trending from TMDB

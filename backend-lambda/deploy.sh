@@ -14,6 +14,7 @@ S3_BUCKET="${2:?Error: S3 bucket name required}"
 REGION="${3:-us-east-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 # Create temp directory
@@ -44,14 +45,21 @@ echo "Layer size: $LAYER_SIZE"
 echo "Building Lambda deployment package using Docker (arm64)..."
 
 # Build main package (without layer dependencies)
+# Mount both the repo root and backend-lambda for requirements
 docker run --rm --platform linux/arm64 \
     --entrypoint /bin/bash \
+    -v "$REPO_ROOT":/var/repo \
     -v "$SCRIPT_DIR":/var/task \
     -v "$TEMP_DIR/package":/var/package \
     public.ecr.aws/lambda/python:3.12 \
     -c '
         pip install -r /var/task/requirements.txt -t /var/package --quiet && \
-        cp /var/task/*.py /var/package/ && \
+        # Copy shared modules (preserving directory structure)
+        cp -r /var/repo/shared /var/package/shared && \
+        # Copy provider modules
+        mkdir -p /var/package/providers/aws && \
+        cp /var/repo/providers/__init__.py /var/package/providers/ && \
+        cp /var/repo/providers/aws/*.py /var/package/providers/aws/ && \
         python -m compileall -b -q /var/package && \
         python -c "
 import os
@@ -65,13 +73,16 @@ for p in pkg.rglob(\"__pycache__\"):
     if p.is_dir():
         shutil.rmtree(p)
 
-# Remove top-level .py files (our source code)
-for p in pkg.glob(\"*.py\"):
-    p.unlink()
+# Remove .py files from our source code (keep .pyc)
+for d in [\"shared\", \"providers\"]:
+    src_dir = pkg / d
+    if src_dir.exists():
+        for p in src_dir.rglob(\"*.py\"):
+            p.unlink()
 
 # Remove .py from pure-Python packages (no .so files)
 for d in pkg.iterdir():
-    if d.is_dir() and not any(d.rglob(\"*.so\")):
+    if d.is_dir() and d.name not in (\"shared\", \"providers\") and not any(d.rglob(\"*.so\")):
         for p in d.rglob(\"*.py\"):
             p.unlink()
 "
