@@ -5,7 +5,7 @@ title: AWS Deployment
 
 # AWS Serverless Deployment
 
-Deploy Overseer Lite to AWS using Lambda, DynamoDB, and CloudFront for a low-cost, highly available setup.
+Deploy Stellarr to AWS using Lambda, DynamoDB, and CloudFront for a low-cost, highly available setup.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ Edit `terraform.tfvars`:
 
 ```hcl
 aws_region       = "us-east-1"
-domain_name      = "overseer.example.com"
+domain_name      = "stellarr.example.com"
 route53_zone_id  = "Z1234567890ABC"
 
 # Secrets (will be stored in AWS Secrets Manager)

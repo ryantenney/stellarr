@@ -1,6 +1,6 @@
 <div align="center">
 
-# Overseer Lite
+# Stellarr
 
 **A lightweight media request system for Sonarr & Radarr — no open ports required.**
 
@@ -13,7 +13,7 @@
 
 ---
 
-A self-hosted alternative to Overseerr that keeps things simple. Search TMDB for movies and TV shows, add them to request lists, and let Sonarr/Radarr pull them in via native import list endpoints. Deploy with Docker for auto-HTTPS, or go fully serverless on AWS for under a dollar a month.
+A self-hosted alternative to Overseerr that keeps things simple. Search TMDB for movies and TV shows, add them to request lists, and let Sonarr/Radarr pull them in via native import list endpoints. Runs fully serverless on AWS for under a dollar a month — no servers to maintain, no ports to open. A Docker Compose option is also available for local or self-hosted setups.
 
 ### Highlights
 
@@ -30,7 +30,7 @@ A self-hosted alternative to Overseerr that keeps things simple. Search TMDB for
 ## Deployment Options
 
 <details>
-<summary><strong>Architecture: Docker (Recommended for Self-Hosting)</strong></summary>
+<summary><strong>Architecture: Docker</strong></summary>
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -67,36 +67,6 @@ A self-hosted alternative to Overseerr that keeps things simple. Search TMDB for
 ```
 
 </details>
-
----
-
-## Quick Start: Docker
-
-### Prerequisites
-
-- Docker and Docker Compose
-- TMDB API Key (free at https://www.themoviedb.org/settings/api)
-
-### Setup
-
-1. Clone and configure:
-   ```bash
-   git clone <repo-url>
-   cd overseer-lite
-   cp .env.example .env
-   # Edit .env with your settings
-   ```
-
-2. Start the application:
-   ```bash
-   # Development (HTTP only)
-   docker compose up -d
-
-   # Production (automatic HTTPS via Caddy)
-   docker compose -f docker-compose.prod.yml up -d
-   ```
-
-3. Access at `http://localhost` or `https://your-domain.com`
 
 ---
 
@@ -148,6 +118,36 @@ A self-hosted alternative to Overseerr that keeps things simple. Search TMDB for
 
 ---
 
+## Quick Start: Docker
+
+### Prerequisites
+
+- Docker and Docker Compose
+- TMDB API Key (free at https://www.themoviedb.org/settings/api)
+
+### Setup
+
+1. Clone and configure:
+   ```bash
+   git clone <repo-url>
+   cd stellarr
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
+
+2. Start the application:
+   ```bash
+   # Development (HTTP only)
+   docker compose up -d
+
+   # Production (automatic HTTPS via Caddy)
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+
+3. Access at `http://localhost` or `https://your-domain.com`
+
+---
+
 ## Import Lists for Sonarr/Radarr
 
 ### Radarr (Movies)
@@ -190,7 +190,7 @@ Configure Plex to send webhooks when new media is added:
 
 1. In Plex: Settings → Webhooks → Add Webhook
 2. URL: `https://your-domain.com/webhook/plex?token=YOUR_PLEX_WEBHOOK_TOKEN`
-3. Overseer will auto-mark matching requests as "Added"
+3. Stellarr will auto-mark matching requests as "Added"
 
 The webhook also adds items to the library table, enabling "In Library" badges on search results.
 
@@ -204,7 +204,7 @@ pip install -r requirements.txt
 python plex-sync.py \
   --plex-url http://localhost:32400 \
   --plex-token YOUR_PLEX_TOKEN \
-  --overseer-url https://your-domain.com \
+  --stellarr-url https://your-domain.com \
   --sync-token YOUR_PLEX_WEBHOOK_TOKEN
 ```
 
@@ -279,7 +279,7 @@ This syncs all movies and TV shows from Plex, enabling "In Library" badges even 
 <summary><strong>Project Structure</strong></summary>
 
 ```
-overseer-lite/
+stellarr/
 ├── backend/              # Docker backend (SQLite)
 ├── backend-lambda/       # AWS Lambda backend (DynamoDB)
 ├── frontend/             # Svelte SPA

@@ -11,7 +11,7 @@ from dynamodb_lite import DynamoDBClient, ConditionalCheckFailedException
 print("DEBUG: database.py loading (boto3-free)...", flush=True)
 
 # Get table name from environment
-TABLE_NAME = os.environ.get('DYNAMODB_TABLE', 'overseer-lite-requests')
+TABLE_NAME = os.environ.get('DYNAMODB_TABLE', 'stellarr-requests')
 AWS_REGION = os.environ.get('AWS_REGION_NAME', 'us-east-1')
 
 # Create lightweight DynamoDB client

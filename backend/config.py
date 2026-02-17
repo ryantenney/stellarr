@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     preshared_password: str = "changeme"
     tmdb_api_key: str = ""
     tmdb_base_url: str = "https://api.themoviedb.org/3"
-    database_path: str = "/app/data/overseer.db"
+    database_path: str = "/app/data/stellarr.db"
     feed_token: str = ""  # Optional token for RSS/list endpoint protection
     plex_webhook_token: str = ""  # Token for Plex webhook authentication
     plex_server_name: str = ""  # Optional Plex server name for validation

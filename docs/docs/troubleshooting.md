@@ -5,7 +5,7 @@ title: Troubleshooting
 
 # Troubleshooting
 
-Common issues and solutions for Overseer Lite.
+Common issues and solutions for Stellarr.
 
 ## Authentication Issues
 
@@ -29,7 +29,7 @@ Wait 15 minutes, or if you have server access:
 
 ```bash
 # Docker - check database
-sqlite3 data/overseer.db "DELETE FROM rate_limits;"
+sqlite3 data/stellarr.db "DELETE FROM rate_limits;"
 
 # AWS - items auto-expire via DynamoDB TTL
 ```
@@ -61,7 +61,7 @@ Some TMDB entries don't have external IDs. These items:
 - Won't appear in Sonarr/Radarr feeds
 - Show a warning in the UI
 
-This is a TMDB data issue - nothing Overseer can fix.
+This is a TMDB data issue - nothing Stellarr can fix.
 
 ### Request not appearing in Sonarr/Radarr
 
@@ -84,7 +84,7 @@ The Plex webhook should mark requests as "Added". If not:
 ### Webhook not firing
 
 1. **Check Plex settings** - Verify webhook URL in Settings → Webhooks
-2. **Check network** - Plex must be able to reach your Overseer instance
+2. **Check network** - Plex must be able to reach your Stellarr instance
 3. **Check logs** - Look for `WEBHOOK:` entries in CloudWatch or Docker logs
 
 ### "Server name mismatch"

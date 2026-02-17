@@ -2,11 +2,11 @@
 aws_region = "us-east-1"
 
 # Project settings
-project_name = "overseer-lite"
+project_name = "stellarr"
 environment  = "prod"
 
 # Domain configuration
-domain_name    = "overseer.example.com"
+domain_name    = "stellarr.example.com"
 hosted_zone_id = "Z1234567890ABC"  # Your Route53 hosted zone ID
 
 # Application secrets (use environment variables or secrets management in CI/CD)

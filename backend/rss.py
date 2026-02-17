@@ -35,8 +35,8 @@ async def generate_movie_rss(base_url: str) -> str:
     requests = await get_all_requests(media_type="movie")
 
     fg = create_feed_generator(
-        title="Overseer Lite - Movie Requests",
-        description="Movie requests from Overseer Lite for Radarr",
+        title="Stellarr - Movie Requests",
+        description="Movie requests from Stellarr for Radarr",
         link=f"{base_url}/rss/movies"
     )
 
@@ -73,8 +73,8 @@ async def generate_tv_rss(base_url: str) -> str:
     requests = await get_all_requests(media_type="tv")
 
     fg = create_feed_generator(
-        title="Overseer Lite - TV Show Requests",
-        description="TV show requests from Overseer Lite",
+        title="Stellarr - TV Show Requests",
+        description="TV show requests from Stellarr",
         link=f"{base_url}/rss/tv"
     )
 
@@ -103,8 +103,8 @@ async def generate_combined_rss(base_url: str) -> str:
     requests = await get_all_requests()
 
     fg = create_feed_generator(
-        title="Overseer Lite - All Requests",
-        description="All media requests from Overseer Lite",
+        title="Stellarr - All Requests",
+        description="All media requests from Stellarr",
         link=f"{base_url}/rss/all"
     )
 

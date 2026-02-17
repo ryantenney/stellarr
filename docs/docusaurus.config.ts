@@ -3,7 +3,7 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'Overseer Lite',
+  title: 'Stellarr',
   tagline: 'A lightweight media request system for Sonarr and Radarr',
   favicon: 'img/favicon.ico',
 
@@ -13,11 +13,11 @@ const config: Config = {
 
   // GitHub Pages URL
   url: 'https://ryantenney.github.io',
-  baseUrl: '/overseer-lite/',
+  baseUrl: '/stellarr/',
 
   // GitHub Pages deployment config
   organizationName: 'ryantenney',
-  projectName: 'overseer-lite',
+  projectName: 'stellarr',
   trailingSlash: false,
 
   onBrokenLinks: 'throw',
@@ -35,7 +35,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/', // Docs at root
-          editUrl: 'https://github.com/ryantenney/overseer-lite/tree/main/docs/',
+          editUrl: 'https://github.com/ryantenney/stellarr/tree/main/docs/',
         },
         blog: false, // Disable blog
         theme: {
@@ -51,9 +51,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Overseer Lite',
+      title: 'Stellarr',
       logo: {
-        alt: 'Overseer Lite',
+        alt: 'Stellarr',
         src: 'img/logo.svg',
       },
       items: [
@@ -64,7 +64,7 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://github.com/ryantenney/overseer-lite',
+          href: 'https://github.com/ryantenney/stellarr',
           label: 'GitHub',
           position: 'right',
         },
@@ -93,12 +93,12 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/ryantenney/overseer-lite',
+              href: 'https://github.com/ryantenney/stellarr',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Overseer Lite. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Stellarr. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

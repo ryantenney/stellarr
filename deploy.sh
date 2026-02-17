@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Unified deployment script for Overseer Lite
+# Unified deployment script for Stellarr
 #
 # Usage:
 #   ./deploy.sh              # Deploy everything (terraform + backend + frontend + invalidate)
@@ -99,7 +99,7 @@ get_tf_outputs() {
     LAMBDA_BUCKET=$(terraform output -raw lambda_deployment_bucket 2>/dev/null) || true
     CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null) || true
     CACHE_WARMER_FUNCTION=$(terraform output -raw cache_warmer_function_name 2>/dev/null) || true
-    APP_NAME=$(terraform output -raw app_name 2>/dev/null) || APP_NAME="Overseer"
+    APP_NAME=$(terraform output -raw app_name 2>/dev/null) || APP_NAME="Stellarr"
 
     cd "$SCRIPT_DIR"
 
@@ -146,7 +146,7 @@ deploy_backend() {
         aws lambda update-function-code \
             --function-name "$CACHE_WARMER_FUNCTION" \
             --s3-bucket "$LAMBDA_BUCKET" \
-            --s3-key "lambda/overseer-lite.zip" \
+            --s3-key "lambda/stellarr.zip" \
             --region us-east-1 \
             > /dev/null
 
@@ -224,7 +224,7 @@ invalidate_cache() {
 }
 
 # Main execution
-echo -e "${BLUE}Overseer Lite Deployment${NC}"
+echo -e "${BLUE}Stellarr Deployment${NC}"
 echo -e "${BLUE}========================${NC}"
 
 # Run terraform if requested

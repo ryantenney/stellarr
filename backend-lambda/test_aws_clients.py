@@ -7,8 +7,8 @@ Usage:
     python test_aws_clients.py <table-name> [secret-arn]
 
 Examples:
-    python test_aws_clients.py overseer-lite-requests
-    python test_aws_clients.py overseer-lite-requests arn:aws:secretsmanager:us-east-1:123:secret:my-secret
+    python test_aws_clients.py stellarr-requests
+    python test_aws_clients.py stellarr-requests arn:aws:secretsmanager:us-east-1:123:secret:my-secret
 """
 import sys
 import os

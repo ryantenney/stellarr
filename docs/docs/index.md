@@ -4,7 +4,7 @@ slug: /
 title: Introduction
 ---
 
-# Overseer Lite
+# Stellarr
 
 A lightweight media request system that generates feeds compatible with Sonarr and Radarr. Users can search for TV shows and movies via TMDB and add them to request lists, which are exposed as import list endpoints.
 
@@ -21,7 +21,7 @@ A lightweight media request system that generates feeds compatible with Sonarr a
 
 ## Architecture
 
-Overseer Lite can be deployed in two ways:
+Stellarr can be deployed in two ways:
 
 ### Docker (Self-Hosted)
 

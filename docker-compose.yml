@@ -1,18 +1,18 @@
 services:
   backend:
     build: ./backend
-    container_name: overseer-backend
+    container_name: stellarr-backend
     restart: unless-stopped
     environment:
       - APP_SECRET_KEY=${APP_SECRET_KEY:-change-me-in-production}
       - PRESHARED_PASSWORD=${PRESHARED_PASSWORD:-changeme}
       - TMDB_API_KEY=${TMDB_API_KEY}
       - FEED_TOKEN=${FEED_TOKEN:-}
-      - DATABASE_PATH=/app/data/overseer.db
+      - DATABASE_PATH=/app/data/stellarr.db
     volumes:
       - ./data:/app/data
     networks:
-      - overseer-network
+      - stellarr-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -21,16 +21,16 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: overseer-frontend
+    container_name: stellarr-frontend
     restart: unless-stopped
     networks:
-      - overseer-network
+      - stellarr-network
     depends_on:
       - backend
 
   caddy:
     image: caddy:2-alpine
-    container_name: overseer-caddy
+    container_name: stellarr-caddy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -38,11 +38,11 @@ services:
       - ./caddy/Caddyfile.dev.json:/etc/caddy/caddy.json:ro
     command: caddy run --config /etc/caddy/caddy.json
     networks:
-      - overseer-network
+      - stellarr-network
     depends_on:
       - backend
       - frontend
 
 networks:
-  overseer-network:
+  stellarr-network:
     driver: bridge

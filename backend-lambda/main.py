@@ -196,7 +196,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Overseer Lite",
+    title="Stellarr",
     description="A lightweight media request system for Sonarr/Radarr",
     version="1.0.0",
     lifespan=lifespan
@@ -301,7 +301,7 @@ PBKDF2_ITERATIONS = 100000
 
 
 class AuthChallenge(BaseModel):
-    origin: str      # The origin URL (e.g., "https://overseer.example.com")
+    origin: str      # The origin URL (e.g., "https://stellarr.example.com")
     timestamp: int   # Unix timestamp when hash was generated
     hash: str        # SHA256(PBKDF2(password, origin):timestamp)
     name: str        # User's display name
@@ -754,7 +754,7 @@ def get_feed_info(request: Request):
 @app.get("/api/health")
 def health_check():
     """Health check endpoint - no dependencies, fastest possible response."""
-    return {"status": "healthy", "service": "overseer-lite"}
+    return {"status": "healthy", "service": "stellarr"}
 
 
 # --- Plex Webhook ---

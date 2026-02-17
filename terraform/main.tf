@@ -17,11 +17,11 @@ terraform {
   # 2. Then uncomment and configure this block:
   #
   # backend "s3" {
-  #   bucket         = "overseer-lite-terraform-state"
-  #   key            = "overseer-lite/terraform.tfstate"
+  #   bucket         = "stellarr-terraform-state"
+  #   key            = "stellarr/terraform.tfstate"
   #   region         = "us-east-1"
   #   encrypt        = true
-  #   dynamodb_table = "overseer-lite-terraform-locks"
+  #   dynamodb_table = "stellarr-terraform-locks"
   # }
 }
 

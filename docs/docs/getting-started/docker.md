@@ -5,7 +5,7 @@ title: Docker Deployment
 
 # Docker Deployment
 
-The easiest way to self-host Overseer Lite is with Docker Compose. This guide covers both development and production setups.
+The easiest way to self-host Stellarr is with Docker Compose. This guide covers both development and production setups.
 
 ## Prerequisites
 
@@ -17,8 +17,8 @@ The easiest way to self-host Overseer Lite is with Docker Compose. This guide co
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/ryantenney/overseer-lite.git
-cd overseer-lite
+git clone https://github.com/ryantenney/stellarr.git
+cd stellarr
 ```
 
 ### 2. Configure Environment
@@ -54,7 +54,7 @@ Access at `http://localhost`
 
 ```bash
 # Set your domain in .env
-DOMAIN=overseer.example.com
+DOMAIN=stellarr.example.com
 
 docker compose -f docker-compose.prod.yml up -d
 ```
@@ -80,9 +80,9 @@ Caddy will automatically obtain and renew SSL certificates via Let's Encrypt.
 After starting, the following directories are created:
 
 ```
-overseer-lite/
+stellarr/
 ├── data/
-│   └── overseer.db     # SQLite database
+│   └── stellarr.db     # SQLite database
 └── caddy_data/          # SSL certificates (production)
 ```
 

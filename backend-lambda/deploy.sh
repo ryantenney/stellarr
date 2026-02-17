@@ -84,8 +84,8 @@ LAMBDA_SIZE=$(du -h "$TEMP_DIR/lambda.zip" | cut -f1)
 echo "Lambda size: $LAMBDA_SIZE"
 
 echo "Uploading to S3..."
-aws s3 cp "$TEMP_DIR/lambda.zip" "s3://$S3_BUCKET/lambda/overseer-lite.zip" --region "$REGION"
-aws s3 cp "$TEMP_DIR/layer.zip" "s3://$S3_BUCKET/lambda/overseer-lite-layer.zip" --region "$REGION"
+aws s3 cp "$TEMP_DIR/lambda.zip" "s3://$S3_BUCKET/lambda/stellarr.zip" --region "$REGION"
+aws s3 cp "$TEMP_DIR/layer.zip" "s3://$S3_BUCKET/lambda/stellarr-layer.zip" --region "$REGION"
 
 # Derive layer name from function name (same prefix)
 LAYER_NAME="${FUNCTION_NAME%-api}-deps"
@@ -93,7 +93,7 @@ LAYER_NAME="${FUNCTION_NAME%-api}-deps"
 echo "Publishing new layer version..."
 LAYER_VERSION=$(aws lambda publish-layer-version \
     --layer-name "$LAYER_NAME" \
-    --content S3Bucket="$S3_BUCKET",S3Key="lambda/overseer-lite-layer.zip" \
+    --content S3Bucket="$S3_BUCKET",S3Key="lambda/stellarr-layer.zip" \
     --compatible-runtimes python3.12 \
     --compatible-architectures arm64 \
     --region "$REGION" \
@@ -107,7 +107,7 @@ echo "Updating Lambda function..."
 aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
     --s3-bucket "$S3_BUCKET" \
-    --s3-key "lambda/overseer-lite.zip" \
+    --s3-key "lambda/stellarr.zip" \
     --region "$REGION" \
     > /dev/null
 

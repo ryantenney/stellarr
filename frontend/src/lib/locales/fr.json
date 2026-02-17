@@ -8,7 +8,7 @@
 		"disableNotifications": "Désactiver les notifications"
 	},
 	"auth": {
-		"title": "Overseer Lite",
+		"title": "Stellarr",
 		"subtitle": "Entrez votre nom et mot de passe pour continuer",
 		"namePlaceholder": "Votre nom",
 		"passwordPlaceholder": "Mot de passe",

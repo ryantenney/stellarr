@@ -5,7 +5,7 @@ title: Plex Integration
 
 # Plex Integration
 
-Overseer Lite integrates with Plex in two ways:
+Stellarr integrates with Plex in two ways:
 
 1. **Webhooks** - Automatically mark requests as "Added" when Plex downloads new media
 2. **Library Sync** - Bulk import your existing library to show "In Library" badges
@@ -18,13 +18,13 @@ Overseer Lite integrates with Plex in two ways:
 2. Click **Add Webhook**
 3. Enter your webhook URL:
    ```
-   https://overseer.example.com/webhook/plex?token=YOUR_PLEX_WEBHOOK_TOKEN
+   https://stellarr.example.com/webhook/plex?token=YOUR_PLEX_WEBHOOK_TOKEN
    ```
 4. Click **Save Changes**
 
 ### How It Works
 
-When Plex adds new media to your library, it sends a `library.new` webhook. Overseer Lite:
+When Plex adds new media to your library, it sends a `library.new` webhook. Stellarr:
 
 1. Parses the webhook payload to extract TMDB/TVDB IDs
 2. Adds the item to the library table (enables "In Library" badges)
@@ -39,7 +39,7 @@ When Plex adds new media to your library, it sends a `library.new` webhook. Over
 
 ### ID Resolution
 
-Overseer uses multiple strategies to match webhook events to requests:
+Stellarr uses multiple strategies to match webhook events to requests:
 
 1. **TMDB ID** - Direct match (most reliable)
 2. **TVDB ID** - For TV shows
@@ -94,7 +94,7 @@ pip install -r requirements.txt
 python plex-sync.py \
   --plex-url http://localhost:32400 \
   --plex-token YOUR_PLEX_TOKEN \
-  --overseer-url https://overseer.example.com \
+  --stellarr-url https://stellarr.example.com \
   --sync-token YOUR_PLEX_WEBHOOK_TOKEN
 ```
 
@@ -103,8 +103,8 @@ Or use environment variables:
 ```bash
 export PLEX_URL=http://localhost:32400
 export PLEX_TOKEN=your-plex-token
-export OVERSEER_URL=https://overseer.example.com
-export OVERSEER_SYNC_TOKEN=your-sync-token
+export STELLARR_URL=https://stellarr.example.com
+export STELLARR_SYNC_TOKEN=your-sync-token
 
 python plex-sync.py
 ```
@@ -116,7 +116,7 @@ The script:
 1. Connects to your Plex server
 2. Scans all movie and TV show libraries
 3. Extracts TMDB and TVDB IDs from each item
-4. Sends them to Overseer's sync endpoint
+4. Sends them to Stellarr's sync endpoint
 5. Marks any matching requests as "Added"
 
 ### Getting Your Plex Token
@@ -153,7 +153,7 @@ This prevents duplicate requests and helps users see what's already available.
 
 ```bash
 # Movie
-curl -X POST "https://overseer.example.com/webhook/plex?token=YOUR_TOKEN" \
+curl -X POST "https://stellarr.example.com/webhook/plex?token=YOUR_TOKEN" \
   -F 'payload={
     "event": "library.new",
     "Server": {"title": "My Plex Server"},
@@ -169,7 +169,7 @@ curl -X POST "https://overseer.example.com/webhook/plex?token=YOUR_TOKEN" \
   }'
 
 # TV Show
-curl -X POST "https://overseer.example.com/webhook/plex?token=YOUR_TOKEN" \
+curl -X POST "https://stellarr.example.com/webhook/plex?token=YOUR_TOKEN" \
   -F 'payload={
     "event": "library.new",
     "Server": {"title": "My Plex Server"},
@@ -204,7 +204,7 @@ curl -X POST "https://overseer.example.com/webhook/plex?token=YOUR_TOKEN" \
 
 1. Verify the webhook URL in Plex settings
 2. Check that the token matches `PLEX_WEBHOOK_TOKEN`
-3. Ensure Plex can reach your Overseer instance
+3. Ensure Plex can reach your Stellarr instance
 
 ### "Server name mismatch"
 

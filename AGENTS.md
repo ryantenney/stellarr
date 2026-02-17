@@ -4,7 +4,7 @@ This file provides guidance to AI coding assistants working with this repository
 
 ## Project Overview
 
-Overseer Lite is a lightweight media request system for searching TV shows and movies via TMDB and exposing requests as RSS feeds and JSON endpoints compatible with Sonarr and Radarr.
+Stellarr is a lightweight media request system for searching TV shows and movies via TMDB and exposing requests as RSS feeds and JSON endpoints compatible with Sonarr and Radarr.
 
 ## Development Commands
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Sync Plex library to Overseer Lite.
+Sync Plex library to Stellarr.
 
-This script reads your Plex library and syncs the TMDB/TVDB IDs to Overseer,
+This script reads your Plex library and syncs the TMDB/TVDB IDs to Stellarr,
 enabling "In Library" badges on search results and marking existing requests as added.
 
 Run on the Plex server or any machine with network access to Plex.
@@ -12,7 +12,7 @@ Requirements:
 
 Usage:
     python plex-sync.py --plex-url http://localhost:32400 --plex-token YOUR_PLEX_TOKEN \
-        --overseer-url https://overseer.example.com --sync-token YOUR_SYNC_TOKEN
+        --stellarr-url https://stellarr.example.com --sync-token YOUR_SYNC_TOKEN
 
     # Sync only specific libraries
     python plex-sync.py ... -l Movies -l "TV Shows"
@@ -23,8 +23,8 @@ Usage:
 Or via environment variables:
     export PLEX_URL=http://localhost:32400
     export PLEX_TOKEN=your_plex_token
-    export OVERSEER_URL=https://overseer.example.com
-    export OVERSEER_SYNC_TOKEN=your_plex_webhook_token
+    export STELLARR_URL=https://stellarr.example.com
+    export STELLARR_SYNC_TOKEN=your_plex_webhook_token
     python plex-sync.py
 
 To find your Plex token:
@@ -121,7 +121,7 @@ def get_library_items(
 
 def clear_library(
     media_type: str,
-    overseer_url: str,
+    stellarr_url: str,
     sync_token: str,
     max_retries: int = 3,
     verbose: bool = False
@@ -131,7 +131,7 @@ def clear_library(
 
     Args:
         media_type: "movie" or "tv"
-        overseer_url: Base URL of Overseer instance
+        stellarr_url: Base URL of Stellarr instance
         sync_token: Plex webhook token for authentication
         max_retries: Number of retry attempts on failure
         verbose: Print progress information
@@ -139,7 +139,7 @@ def clear_library(
     Returns:
         True if successful, False otherwise
     """
-    url = f"{overseer_url.rstrip('/')}/sync/library"
+    url = f"{stellarr_url.rstrip('/')}/sync/library"
     params = {
         "media_type": media_type,
         "token": sync_token,
@@ -175,22 +175,22 @@ def clear_library(
     return False
 
 
-def sync_to_overseer(
+def sync_to_stellarr(
     items: list[dict],
     media_type: str,
-    overseer_url: str,
+    stellarr_url: str,
     sync_token: str,
     batch_size: int = 100,
     clear_first: bool = True,
     verbose: bool = False
 ) -> dict:
     """
-    POST library items to Overseer sync endpoint in batches.
+    POST library items to Stellarr sync endpoint in batches.
 
     Args:
         items: List of library items
         media_type: "movie" or "tv"
-        overseer_url: Base URL of Overseer instance
+        stellarr_url: Base URL of Stellarr instance
         sync_token: Plex webhook token for authentication
         batch_size: Number of items per request
         clear_first: Whether to clear existing items before syncing
@@ -199,7 +199,7 @@ def sync_to_overseer(
     Returns:
         Aggregated response with total counts
     """
-    url = f"{overseer_url.rstrip('/')}/sync/library"
+    url = f"{stellarr_url.rstrip('/')}/sync/library"
     params = {
         "media_type": media_type,
         "token": sync_token
@@ -207,7 +207,7 @@ def sync_to_overseer(
 
     # Clear existing items first (separate call with retries)
     if clear_first:
-        if not clear_library(media_type, overseer_url, sync_token, verbose=verbose):
+        if not clear_library(media_type, stellarr_url, sync_token, verbose=verbose):
             raise requests.exceptions.RequestException("Failed to clear library")
 
     total_synced = 0
@@ -243,7 +243,7 @@ def sync_to_overseer(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync Plex library to Overseer Lite",
+        description="Sync Plex library to Stellarr",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -259,14 +259,14 @@ def main():
         help="Plex authentication token (or PLEX_TOKEN env var)"
     )
     parser.add_argument(
-        "--overseer-url",
-        default=os.environ.get("OVERSEER_URL"),
-        help="Overseer Lite base URL (or OVERSEER_URL env var)"
+        "--stellarr-url",
+        default=os.environ.get("STELLARR_URL"),
+        help="Stellarr base URL (or STELLARR_URL env var)"
     )
     parser.add_argument(
         "--sync-token",
-        default=os.environ.get("OVERSEER_SYNC_TOKEN"),
-        help="Overseer sync token - same as PLEX_WEBHOOK_TOKEN (or OVERSEER_SYNC_TOKEN env var)"
+        default=os.environ.get("STELLARR_SYNC_TOKEN"),
+        help="Stellarr sync token - same as PLEX_WEBHOOK_TOKEN (or STELLARR_SYNC_TOKEN env var)"
     )
     parser.add_argument(
         "--library", "-l",
@@ -319,14 +319,14 @@ def main():
         print("Error: Plex token is required. Use --plex-token or set PLEX_TOKEN env var.")
         sys.exit(1)
 
-    # Overseer URL/token only required if not just listing libraries
+    # Stellarr URL/token only required if not just listing libraries
     if not args.list_libraries:
-        if not args.overseer_url:
-            print("Error: Overseer URL is required. Use --overseer-url or set OVERSEER_URL env var.")
+        if not args.stellarr_url:
+            print("Error: Stellarr URL is required. Use --stellarr-url or set STELLARR_URL env var.")
             sys.exit(1)
 
         if not args.sync_token:
-            print("Error: Sync token is required. Use --sync-token or set OVERSEER_SYNC_TOKEN env var.")
+            print("Error: Sync token is required. Use --sync-token or set STELLARR_SYNC_TOKEN env var.")
             sys.exit(1)
 
     if args.movies_only and args.tv_only:
@@ -365,10 +365,10 @@ def main():
                 for item in movies[:5]:
                     print(f"  - {item['title']} (TMDB: {item['tmdb_id']})")
         else:
-            print("Syncing movies to Overseer...")
+            print("Syncing movies to Stellarr...")
             try:
-                result = sync_to_overseer(
-                    movies, "movie", args.overseer_url, args.sync_token,
+                result = sync_to_stellarr(
+                    movies, "movie", args.stellarr_url, args.sync_token,
                     batch_size=args.batch_size, clear_first=not args.no_clear,
                     verbose=args.verbose
                 )
@@ -393,10 +393,10 @@ def main():
                 for item in shows[:5]:
                     print(f"  - {item['title']} (TMDB: {item['tmdb_id']}, TVDB: {item.get('tvdb_id', 'N/A')})")
         else:
-            print("Syncing TV shows to Overseer...")
+            print("Syncing TV shows to Stellarr...")
             try:
-                result = sync_to_overseer(
-                    shows, "tv", args.overseer_url, args.sync_token,
+                result = sync_to_stellarr(
+                    shows, "tv", args.stellarr_url, args.sync_token,
                     batch_size=args.batch_size, clear_first=not args.no_clear,
                     verbose=args.verbose
                 )

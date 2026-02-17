@@ -32,7 +32,7 @@ POST /api/auth/verify
 Content-Type: application/json
 
 {
-  "origin": "https://overseer.example.com",
+  "origin": "https://stellarr.example.com",
   "timestamp": 1703001234,
   "hash": "sha256-hash-here",
   "name": "John"
@@ -214,14 +214,14 @@ Returns URLs and setup instructions for all available feeds.
     "radarr": {
       "name": "Radarr (Movies)",
       "description": "StevenLu Custom JSON format",
-      "url": "https://overseer.example.com/list/radarr?token=...",
+      "url": "https://stellarr.example.com/list/radarr?token=...",
       "format": "json",
       "setup": "Settings -> Import Lists -> Custom Lists -> StevenLu Custom"
     },
     "sonarr": {
       "name": "Sonarr (TV Shows)",
       "description": "Custom List JSON format with TVDB IDs",
-      "url": "https://overseer.example.com/list/sonarr?token=...",
+      "url": "https://stellarr.example.com/list/sonarr?token=...",
       "format": "json",
       "setup": "Settings -> Import Lists -> Add -> Custom Lists"
     }
@@ -344,7 +344,7 @@ GET /api/health
 ```json
 {
   "status": "healthy",
-  "service": "overseer-lite"
+  "service": "stellarr"
 }
 ```
 

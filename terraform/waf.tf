@@ -5,7 +5,7 @@ resource "aws_wafv2_web_acl" "main" {
   count = var.enable_waf ? 1 : 0
 
   name        = "${local.name_prefix}-waf"
-  description = "WAF for Overseer Lite - rate limiting and threat protection"
+  description = "WAF for Stellarr - rate limiting and threat protection"
   scope       = "CLOUDFRONT"
   provider    = aws.us_east_1  # WAF for CloudFront must be in us-east-1
 

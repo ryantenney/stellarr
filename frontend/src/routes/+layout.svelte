@@ -7,7 +7,7 @@
 
 	initI18n();
 
-	const appName = import.meta.env.VITE_APP_NAME || 'Overseer';
+	const appName = import.meta.env.VITE_APP_NAME || 'Stellarr';
 	let showLangDropdown = false;
 
 	let showFeedModal = false;

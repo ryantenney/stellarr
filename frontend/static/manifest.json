@@ -1,6 +1,6 @@
 {
-  "name": "Overseer Lite",
-  "short_name": "Overseer",
+  "name": "Stellarr",
+  "short_name": "Stellarr",
   "description": "A lightweight media request system",
   "start_url": "/",
   "display": "standalone",

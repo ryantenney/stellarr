@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name used for resource naming"
   type        = string
-  default     = "overseer-lite"
+  default     = "stellarr"
 }
 
 variable "environment" {
@@ -17,7 +17,7 @@ variable "environment" {
 }
 
 variable "domain_name" {
-  description = "Domain name for the application (e.g., overseer.example.com)"
+  description = "Domain name for the application (e.g., stellarr.example.com)"
   type        = string
 }
 
@@ -121,5 +121,5 @@ variable "rate_limit_window_seconds" {
 variable "app_name" {
   description = "Application name displayed in the header"
   type        = string
-  default     = "Overseer"
+  default     = "Stellarr"
 }

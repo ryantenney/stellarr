@@ -5,7 +5,7 @@ title: Sonarr & Radarr
 
 # Sonarr & Radarr Setup
 
-Overseer Lite exposes your requests as import lists compatible with Sonarr and Radarr. When a user requests media, it automatically appears in your \*arr application.
+Stellarr exposes your requests as import lists compatible with Sonarr and Radarr. When a user requests media, it automatically appears in your \*arr application.
 
 ## Available Endpoints
 
@@ -34,7 +34,7 @@ Overseer Lite exposes your requests as import lists compatible with Sonarr and R
 If `FEED_TOKEN` is configured, append it to your URLs:
 
 ```
-https://overseer.example.com/list/radarr?token=YOUR_FEED_TOKEN
+https://stellarr.example.com/list/radarr?token=YOUR_FEED_TOKEN
 ```
 
 ## Radarr Setup
@@ -45,8 +45,8 @@ https://overseer.example.com/list/radarr?token=YOUR_FEED_TOKEN
 2. Click **+** to add a new list
 3. Select **Custom Lists** → **StevenLu Custom**
 4. Configure:
-   - **Name**: Overseer Lite
-   - **URL**: `https://overseer.example.com/list/radarr?token=YOUR_TOKEN`
+   - **Name**: Stellarr
+   - **URL**: `https://stellarr.example.com/list/radarr?token=YOUR_TOKEN`
    - **Import Automatically**: Yes
    - **Quality Profile**: Your preferred profile
    - **Root Folder**: Your movies folder
@@ -75,8 +75,8 @@ Radarr uses the IMDB ID to identify movies.
 2. Click **+** to add a new list
 3. Select **Custom Lists**
 4. Configure:
-   - **Name**: Overseer Lite
-   - **URL**: `https://overseer.example.com/list/sonarr?token=YOUR_TOKEN`
+   - **Name**: Stellarr
+   - **URL**: `https://stellarr.example.com/list/sonarr?token=YOUR_TOKEN`
    - **Import Automatically**: Yes
    - **Quality Profile**: Your preferred profile
    - **Root Folder**: Your TV folder
@@ -105,7 +105,7 @@ If you prefer RSS feeds or need compatibility with other tools:
 ### Radarr RSS
 
 1. Settings → Import Lists → **+** → RSS List
-2. URL: `https://overseer.example.com/rss/movies?token=YOUR_TOKEN`
+2. URL: `https://stellarr.example.com/rss/movies?token=YOUR_TOKEN`
 
 ### Sonarr RSS
 
@@ -138,7 +138,7 @@ curl -X POST "http://localhost:8989/api/v3/command" \
 
 Some TMDB entries don't have corresponding IMDB or TVDB IDs. These items:
 
-- Show a **warning icon** in Overseer's UI
+- Show a **warning icon** in Stellarr's UI
 - **Won't appear** in the respective feed
 
 The UI shows which IDs are missing so users know their request may not be imported automatically.
@@ -162,22 +162,22 @@ The UI shows which IDs are missing so users know their request may not be import
 If items keep being re-added:
 - Ensure "Search on Add" is enabled to immediately download
 - Check that Plex webhooks are working to mark items as added
-- Run a library sync to update Overseer's library cache
+- Run a library sync to update Stellarr's library cache
 
 ### Feed Returns Empty
 
-1. Check you have pending requests in Overseer
+1. Check you have pending requests in Stellarr
 2. Verify requests have valid external IDs
 3. Try accessing the feed URL directly in a browser
 
 ## Example Workflow
 
-1. User searches for "Breaking Bad" in Overseer
+1. User searches for "Breaking Bad" in Stellarr
 2. User clicks "Request"
 3. Request is saved with TVDB ID 81189
 4. Sonarr syncs import lists (every 6 hours or manually)
 5. Sonarr sees new entry, adds show, starts searching
 6. Sonarr downloads episodes
 7. Plex scans library, sends webhook
-8. Overseer marks request as "Added"
-9. User sees green "Added" badge in Overseer
+8. Stellarr marks request as "Added"
+9. User sees green "Added" badge in Stellarr

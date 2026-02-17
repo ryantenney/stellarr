@@ -1,6 +1,6 @@
-# Contributing to Overseer Lite
+# Contributing to Stellarr
 
-Thank you for your interest in contributing to Overseer Lite!
+Thank you for your interest in contributing to Stellarr!
 
 ## Getting Started
 

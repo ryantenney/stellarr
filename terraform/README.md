@@ -1,6 +1,6 @@
-# Terraform Configuration for Overseer Lite
+# Terraform Configuration for Stellarr
 
-This Terraform configuration deploys Overseer Lite to AWS using a serverless architecture optimized for minimal cost.
+This Terraform configuration deploys Stellarr to AWS using a serverless architecture optimized for minimal cost.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ Edit `terraform.tfvars`:
 
 ```hcl
 # Required
-domain_name        = "overseer.example.com"
+domain_name        = "stellarr.example.com"
 hosted_zone_id     = "Z1234567890ABC"
 tmdb_api_key       = "your-tmdb-api-key"
 preshared_password = "your-secure-password"
@@ -140,11 +140,11 @@ Uncomment the backend block in `main.tf`:
 
 ```hcl
 backend "s3" {
-  bucket         = "overseer-lite-terraform-state"
-  key            = "overseer-lite/terraform.tfstate"
+  bucket         = "stellarr-terraform-state"
+  key            = "stellarr/terraform.tfstate"
   region         = "us-east-1"
   encrypt        = true
-  dynamodb_table = "overseer-lite-terraform-locks"
+  dynamodb_table = "stellarr-terraform-locks"
 }
 ```
 

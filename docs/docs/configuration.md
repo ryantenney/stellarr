@@ -5,7 +5,7 @@ title: Configuration
 
 # Configuration
 
-Overseer Lite is configured via environment variables. For Docker deployments, set these in your `.env` file. For AWS, they're stored in Secrets Manager and set via Terraform.
+Stellarr is configured via environment variables. For Docker deployments, set these in your `.env` file. For AWS, they're stored in Secrets Manager and set via Terraform.
 
 ## Required Variables
 
@@ -23,13 +23,13 @@ Overseer Lite is configured via environment variables. For Docker deployments, s
 | `PLEX_WEBHOOK_TOKEN` | Token required for Plex webhook and library sync endpoints | None (disabled) |
 | `PLEX_SERVER_NAME` | Only process webhooks from this Plex server name | None (all servers) |
 | `TVDB_API_KEY` | TVDB API key for episode-to-show resolution | None |
-| `DATABASE_PATH` | Path to SQLite database (Docker only) | `./data/overseer.db` |
+| `DATABASE_PATH` | Path to SQLite database (Docker only) | `./data/stellarr.db` |
 
 ## Authentication
 
 ### Session Tokens
 
-Overseer Lite uses HMAC-SHA256 signed session tokens with a 30-day expiry. The authentication flow:
+Stellarr uses HMAC-SHA256 signed session tokens with a 30-day expiry. The authentication flow:
 
 1. User enters password in the browser
 2. Browser derives a key using PBKDF2 (100,000 iterations)
@@ -54,10 +54,10 @@ If `FEED_TOKEN` is set, all RSS and list endpoints require authentication:
 
 ```
 # Without token (public)
-https://overseer.example.com/list/radarr
+https://stellarr.example.com/list/radarr
 
 # With token (protected)
-https://overseer.example.com/list/radarr?token=your-feed-token
+https://stellarr.example.com/list/radarr?token=your-feed-token
 ```
 
 This prevents unauthorized access to your request lists while still allowing Sonarr/Radarr to import them.
@@ -69,7 +69,7 @@ This prevents unauthorized access to your request lists while still allowing Son
 Set `PLEX_WEBHOOK_TOKEN` to enable the Plex webhook endpoint:
 
 ```
-https://overseer.example.com/webhook/plex?token=your-webhook-token
+https://stellarr.example.com/webhook/plex?token=your-webhook-token
 ```
 
 The same token is used for the library sync endpoint.
@@ -86,7 +86,7 @@ The server name must match exactly as shown in Plex.
 
 ## TVDB Integration
 
-Set `TVDB_API_KEY` to enable episode-to-show resolution. This is useful when Plex sends webhooks for individual episodes - Overseer can look up which show the episode belongs to and mark the correct request as added.
+Set `TVDB_API_KEY` to enable episode-to-show resolution. This is useful when Plex sends webhooks for individual episodes - Stellarr can look up which show the episode belongs to and mark the correct request as added.
 
 Get an API key at [thetvdb.com](https://thetvdb.com/api-information).
 
@@ -137,5 +137,5 @@ PLEX_SERVER_NAME=My Plex Server
 TVDB_API_KEY=tvdb-api-key
 
 # Production only
-DOMAIN=overseer.example.com
+DOMAIN=stellarr.example.com
 ```

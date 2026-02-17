@@ -20,7 +20,7 @@ variable "aws_region" {
 }
 
 variable "project_name" {
-  default = "overseer-lite"
+  default = "stellarr"
 }
 
 # S3 bucket for state
@@ -95,7 +95,7 @@ output "backend_config" {
 
     backend "s3" {
       bucket         = "${aws_s3_bucket.terraform_state.bucket}"
-      key            = "overseer-lite/terraform.tfstate"
+      key            = "stellarr/terraform.tfstate"
       region         = "${var.aws_region}"
       encrypt        = true
       dynamodb_table = "${aws_dynamodb_table.terraform_locks.name}"

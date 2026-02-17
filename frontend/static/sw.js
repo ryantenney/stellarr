@@ -1,5 +1,5 @@
 /**
- * Service Worker for Overseer Lite push notifications.
+ * Service Worker for Stellarr push notifications.
  * Handles background push events when the browser is closed.
  */
 
@@ -14,14 +14,14 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch (e) {
-    payload = { title: 'Overseer Lite', body: event.data.text() };
+    payload = { title: 'Stellarr', body: event.data.text() };
   }
 
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon-192.png',
     badge: '/icon-192.png',
-    tag: payload.tag || 'overseer-notification',
+    tag: payload.tag || 'stellarr-notification',
     renotify: true,
     requireInteraction: false,
     data: payload.data || {},
@@ -33,7 +33,7 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Overseer Lite', options)
+    self.registration.showNotification(payload.title || 'Stellarr', options)
   );
 });
 

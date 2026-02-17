@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Overseer Lite",
+    title="Stellarr",
     description="A lightweight media request system with RSS feeds for Sonarr/Radarr",
     version="1.0.0",
     lifespan=lifespan
@@ -446,7 +446,7 @@ async def get_feed_info(request: Request):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "overseer-lite"}
+    return {"status": "healthy", "service": "stellarr"}
 
 
 # --- Plex Webhook ---
