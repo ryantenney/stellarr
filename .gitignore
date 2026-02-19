@@ -48,3 +48,10 @@ terraform/.terraform.lock.hcl
 terraform/terraform.tfvars
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+
+# Website Terraform
+website/terraform/.terraform
+website/terraform/.terraform.lock.hcl
+website/terraform/terraform.tfvars
+website/terraform/terraform.tfstate
+website/terraform/terraform.tfstate.backup

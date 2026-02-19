@@ -1,0 +1,3 @@
+hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+domain_name    = "stellarr.dev"
+github_repo    = "ryantenney/stellarr"

@@ -1,9 +1,7 @@
 ---
-sidebar_position: 2
 title: AWS Deployment
+description: Deploy Stellarr to AWS using Lambda, DynamoDB, and CloudFront for a low-cost, highly available setup.
 ---
-
-# AWS Serverless Deployment
 
 Deploy Stellarr to AWS using Lambda, DynamoDB, and CloudFront for a low-cost, highly available setup.
 
@@ -141,12 +139,12 @@ cd terraform
 terraform destroy
 ```
 
-:::warning
+:::caution
 This will delete all data including the DynamoDB table. Export your requests first if needed.
 :::
 
 ## Next Steps
 
-- [Configure environment variables](/configuration)
-- [Set up Plex integration](/plex-integration)
-- [Configure Sonarr & Radarr](/sonarr-radarr)
+- [Configure environment variables](/docs/guides/configuration/)
+- [Set up Plex integration](/docs/integrations/plex/)
+- [Configure Sonarr & Radarr](/docs/integrations/sonarr-radarr/)

@@ -1,9 +1,7 @@
 ---
-sidebar_position: 6
 title: API Reference
+description: Complete API endpoint documentation for Stellarr's REST API.
 ---
-
-# API Reference
 
 All API endpoints are prefixed with `/api` unless otherwise noted.
 
@@ -66,7 +64,7 @@ Content-Type: application/json
 
 {
   "query": "breaking bad",
-  "media_type": "tv",  // optional: "movie", "tv", or null for all
+  "media_type": "tv",
   "page": 1
 }
 ```
@@ -130,7 +128,7 @@ Content-Type: application/json
 {
   "tmdb_id": 1396,
   "media_type": "tv",
-  "requested_by": "John"  // optional
+  "requested_by": "John"
 }
 ```
 
@@ -225,7 +223,6 @@ Returns URLs and setup instructions for all available feeds.
       "format": "json",
       "setup": "Settings -> Import Lists -> Add -> Custom Lists"
     }
-    // ... more feeds
   }
 }
 ```
@@ -263,16 +260,6 @@ GET /list/sonarr?token=<feed_token>
   {"tvdbId": "153021"}
 ]
 ```
-
-### RSS Feeds
-
-```http
-GET /rss/movies?token=<feed_token>
-GET /rss/tv?token=<feed_token>
-GET /rss/all?token=<feed_token>
-```
-
-Returns XML RSS feeds.
 
 ## Webhooks
 

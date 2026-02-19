@@ -1,9 +1,7 @@
 ---
-sidebar_position: 1
 title: Docker Deployment
+description: Self-host Stellarr with Docker Compose for both development and production.
 ---
-
-# Docker Deployment
 
 The easiest way to self-host Stellarr is with Docker Compose. This guide covers both development and production setups.
 
@@ -36,7 +34,7 @@ PRESHARED_PASSWORD=your-password          # Password users will enter
 TMDB_API_KEY=your-tmdb-api-key
 
 # Optional
-FEED_TOKEN=your-feed-token                # Protect RSS/list endpoints
+FEED_TOKEN=your-feed-token                # Protect list endpoints
 PLEX_WEBHOOK_TOKEN=your-webhook-token     # Protect Plex webhook
 ```
 
@@ -120,6 +118,6 @@ docker compose logs -f caddy
 
 ## Next Steps
 
-- [Configure environment variables](/configuration)
-- [Set up Plex integration](/plex-integration)
-- [Configure Sonarr & Radarr](/sonarr-radarr)
+- [Configure environment variables](/docs/guides/configuration/)
+- [Set up Plex integration](/docs/integrations/plex/)
+- [Configure Sonarr & Radarr](/docs/integrations/sonarr-radarr/)

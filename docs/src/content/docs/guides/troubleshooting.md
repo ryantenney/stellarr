@@ -1,9 +1,7 @@
 ---
-sidebar_position: 7
 title: Troubleshooting
+description: Common issues and solutions for Stellarr across Docker and AWS deployments.
 ---
-
-# Troubleshooting
 
 Common issues and solutions for Stellarr.
 
@@ -11,10 +9,10 @@ Common issues and solutions for Stellarr.
 
 ### "Invalid credentials" on login
 
-1. **Check password** - Ensure you're entering the correct `PRESHARED_PASSWORD`
-2. **Check clock sync** - The authentication uses timestamps. Ensure your device's clock is accurate
-3. **Clear browser cache** - Try clearing localStorage: `localStorage.clear()` in browser console
-4. **Check rate limiting** - After 5 failed attempts, you're blocked for 15 minutes
+1. **Check password** — Ensure you're entering the correct `PRESHARED_PASSWORD`
+2. **Check clock sync** — The authentication uses timestamps. Ensure your device's clock is accurate
+3. **Clear browser cache** — Try clearing localStorage: `localStorage.clear()` in browser console
+4. **Check rate limiting** — After 5 failed attempts, you're blocked for 15 minutes
 
 ### Session expires too quickly
 
@@ -38,9 +36,9 @@ sqlite3 data/stellarr.db "DELETE FROM rate_limits;"
 
 ### No results found
 
-1. **Check TMDB API key** - Verify `TMDB_API_KEY` is valid
-2. **Try different search terms** - TMDB search can be picky about exact titles
-3. **Check network** - Ensure the server can reach api.themoviedb.org
+1. **Check TMDB API key** — Verify `TMDB_API_KEY` is valid
+2. **Try different search terms** — TMDB search can be picky about exact titles
+3. **Check network** — Ensure the server can reach api.themoviedb.org
 
 ### Missing posters
 
@@ -61,14 +59,14 @@ Some TMDB entries don't have external IDs. These items:
 - Won't appear in Sonarr/Radarr feeds
 - Show a warning in the UI
 
-This is a TMDB data issue - nothing Stellarr can fix.
+This is a TMDB data issue — nothing Stellarr can fix.
 
 ### Request not appearing in Sonarr/Radarr
 
-1. **Check external IDs** - Request must have IMDB (movies) or TVDB (TV) ID
-2. **Force sync** - Go to System → Tasks → Import List Sync in your *arr app
-3. **Check feed URL** - Test the feed URL directly in browser
-4. **Verify token** - Ensure feed token matches
+1. **Check external IDs** — Request must have IMDB (movies) or TVDB (TV) ID
+2. **Force sync** — Go to System → Tasks → Import List Sync in your *arr app
+3. **Check feed URL** — Test the feed URL directly in browser
+4. **Verify token** — Ensure feed token matches
 
 ### Duplicate requests after item downloads
 
@@ -83,9 +81,9 @@ The Plex webhook should mark requests as "Added". If not:
 
 ### Webhook not firing
 
-1. **Check Plex settings** - Verify webhook URL in Settings → Webhooks
-2. **Check network** - Plex must be able to reach your Stellarr instance
-3. **Check logs** - Look for `WEBHOOK:` entries in CloudWatch or Docker logs
+1. **Check Plex settings** — Verify webhook URL in Settings → Webhooks
+2. **Check network** — Plex must be able to reach your Stellarr instance
+3. **Check logs** — Look for `WEBHOOK:` entries in CloudWatch or Docker logs
 
 ### "Server name mismatch"
 
@@ -124,7 +122,7 @@ Add the token parameter: `?token=YOUR_FEED_TOKEN`
 
 ### Feed returns old data
 
-Feeds are not cached - they always return current data. If stale:
+Feeds are not cached — they always return current data. If stale:
 1. Check database has latest requests
 2. Verify you're hitting the right server
 
@@ -210,9 +208,9 @@ Switch to on-demand billing or increase provisioned capacity.
 
 If you're still stuck:
 
-1. **Check logs** - Most issues are visible in logs
-2. **Search issues** - Check GitHub issues for similar problems
-3. **Open an issue** - Include logs, configuration (redact secrets), and steps to reproduce
+1. **Check logs** — Most issues are visible in logs
+2. **Search issues** — Check GitHub issues for similar problems
+3. **Open an issue** — Include logs, configuration (redact secrets), and steps to reproduce
 
 ### Useful Log Commands
 

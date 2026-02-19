@@ -1,23 +1,31 @@
 ---
-sidebar_position: 1
-slug: /
 title: Introduction
+description: A lightweight media request system that generates feeds compatible with Sonarr and Radarr.
+template: doc
+hero:
+  tagline: A lightweight media request system that generates feeds compatible with Sonarr and Radarr.
+  actions:
+    - text: Get Started with Docker
+      link: /docs/getting-started/docker/
+      icon: right-arrow
+      variant: primary
+    - text: Deploy to AWS
+      link: /docs/getting-started/aws/
+      icon: right-arrow
 ---
 
-# Stellarr
-
-A lightweight media request system that generates feeds compatible with Sonarr and Radarr. Users can search for TV shows and movies via TMDB and add them to request lists, which are exposed as import list endpoints.
+import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## Features
 
-- **Simple Authentication** - Preshared password with PBKDF2 key derivation and signed session tokens
-- **TMDB Integration** - Search movies and TV shows using The Movie Database
-- **Sonarr/Radarr Import Lists** - Native JSON formats for direct import
-- **Plex Webhook Integration** - Auto-mark requests as added when Plex downloads media
-- **Library Sync** - Batch sync Plex library to show "In Library" badges
-- **Large Series Warnings** - Visual indicator for TV shows with 7+ seasons
-- **PWA Support** - Install as app on iOS/Android
-- **Modern UI** - Responsive Svelte frontend with dark mode
+- **Simple Authentication** — Preshared password with PBKDF2 key derivation and signed session tokens
+- **TMDB Integration** — Search movies and TV shows using The Movie Database
+- **Sonarr/Radarr Import Lists** — Native JSON formats for direct import
+- **Plex Webhook Integration** — Auto-mark requests as added when Plex downloads media
+- **Library Sync** — Batch sync Plex library to show "In Library" badges
+- **Large Series Warnings** — Visual indicator for TV shows with 7+ seasons
+- **PWA Support** — Install as app on iOS/Android
+- **Modern UI** — Responsive Svelte frontend with dark mode
 
 ## Architecture
 
@@ -59,12 +67,21 @@ Stellarr can be deployed in two ways:
 
 ## Quick Links
 
-- [Docker Deployment](/getting-started/docker) - Get running in minutes with Docker Compose
-- [AWS Deployment](/getting-started/aws) - Serverless deployment with Terraform
-- [Configuration](/configuration) - Environment variables and settings
-- [Plex Integration](/plex-integration) - Webhooks and library sync
-- [Sonarr & Radarr](/sonarr-radarr) - Import list setup
-
-## Screenshots
-
-Coming soon!
+<CardGrid>
+  <Card title="Docker Deployment" icon="laptop">
+    Get running in minutes with Docker Compose.
+    [Get started →](/docs/getting-started/docker/)
+  </Card>
+  <Card title="AWS Deployment" icon="rocket">
+    Serverless deployment with Terraform.
+    [Get started →](/docs/getting-started/aws/)
+  </Card>
+  <Card title="Configuration" icon="setting">
+    Environment variables and settings.
+    [Configure →](/docs/guides/configuration/)
+  </Card>
+  <Card title="Plex Integration" icon="puzzle">
+    Webhooks and library sync.
+    [Set up →](/docs/integrations/plex/)
+  </Card>
+</CardGrid>

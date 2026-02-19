@@ -1,0 +1,43 @@
+/* Purple cosmic theme matching the marketing site */
+
+:root {
+  --sl-color-accent-low: #1a0a2e;
+  --sl-color-accent: #7b2cbf;
+  --sl-color-accent-high: #c48eee;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #eeeeee;
+  --sl-color-gray-2: #c2c2c2;
+  --sl-color-gray-3: #8b8b8b;
+  --sl-color-gray-4: #585858;
+  --sl-color-gray-5: #383838;
+  --sl-color-gray-6: #1a1a1a;
+  --sl-color-black: #0f0f0f;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #ede0f7;
+  --sl-color-accent: #7b2cbf;
+  --sl-color-accent-high: #3d1060;
+  --sl-color-white: #0f0f0f;
+  --sl-color-gray-1: #383838;
+  --sl-color-gray-2: #585858;
+  --sl-color-gray-3: #8b8b8b;
+  --sl-color-gray-4: #c2c2c2;
+  --sl-color-gray-5: #eeeeee;
+  --sl-color-gray-6: #f6f6f6;
+  --sl-color-black: #ffffff;
+}
+
+/* Code blocks */
+:root[data-theme='dark'] pre {
+  background-color: #1a1a1a !important;
+}
+
+/* Tables */
+:root[data-theme='dark'] table {
+  background-color: #1a1a1a;
+}
+
+:root[data-theme='dark'] table tr:nth-child(2n) {
+  background-color: #252525;
+}

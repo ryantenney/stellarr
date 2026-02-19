@@ -1,14 +1,12 @@
 ---
-sidebar_position: 4
 title: Plex Integration
+description: Configure Plex webhooks and library sync to automatically track fulfilled requests.
 ---
-
-# Plex Integration
 
 Stellarr integrates with Plex in two ways:
 
-1. **Webhooks** - Automatically mark requests as "Added" when Plex downloads new media
-2. **Library Sync** - Bulk import your existing library to show "In Library" badges
+1. **Webhooks** — Automatically mark requests as "Added" when Plex downloads new media
+2. **Library Sync** — Bulk import your existing library to show "In Library" badges
 
 ## Webhooks
 
@@ -41,10 +39,10 @@ When Plex adds new media to your library, it sends a `library.new` webhook. Stel
 
 Stellarr uses multiple strategies to match webhook events to requests:
 
-1. **TMDB ID** - Direct match (most reliable)
-2. **TVDB ID** - For TV shows
-3. **Plex GUID** - Cached from previous matches
-4. **Episode TVDB ID** - Resolved to show via TVDB API (requires `TVDB_API_KEY`)
+1. **TMDB ID** — Direct match (most reliable)
+2. **TVDB ID** — For TV shows
+3. **Plex GUID** — Cached from previous matches
+4. **Episode TVDB ID** — Resolved to show via TVDB API (requires `TVDB_API_KEY`)
 
 ### Server Filtering
 
@@ -142,8 +140,8 @@ Run the sync periodically with cron:
 
 Once library sync is complete, search results and trending items show an "In Library" badge for media already in Plex:
 
-- **Green badge** on poster - "In Library"
-- **Grey button** - "In Library" (can't request again)
+- **Green badge** on poster — "In Library"
+- **Grey button** — "In Library" (can't request again)
 
 This prevents duplicate requests and helps users see what's already available.
 

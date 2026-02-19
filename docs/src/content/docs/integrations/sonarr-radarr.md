@@ -1,9 +1,7 @@
 ---
-sidebar_position: 5
 title: Sonarr & Radarr
+description: Configure Sonarr and Radarr import lists to automatically download requested media.
 ---
-
-# Sonarr & Radarr Setup
 
 Stellarr exposes your requests as import lists compatible with Sonarr and Radarr. When a user requests media, it automatically appears in your \*arr application.
 
@@ -13,21 +11,13 @@ Stellarr exposes your requests as import lists compatible with Sonarr and Radarr
 
 | Endpoint | Format | Description |
 |----------|--------|-------------|
-| `/list/radarr` | JSON | **Recommended** - StevenLu Custom format |
-| `/rss/movies` | RSS | Alternative RSS format |
+| `/list/radarr` | JSON | StevenLu Custom format |
 
 ### Sonarr (TV Shows)
 
 | Endpoint | Format | Description |
 |----------|--------|-------------|
-| `/list/sonarr` | JSON | **Recommended** - Custom List format |
-| `/rss/tv` | RSS | Alternative RSS format |
-
-### Combined
-
-| Endpoint | Format | Description |
-|----------|--------|-------------|
-| `/rss/all` | RSS | All requests (movies + TV) |
+| `/list/sonarr` | JSON | Custom List format |
 
 ## Feed Token
 
@@ -97,19 +87,6 @@ The `/list/sonarr` endpoint returns:
 ```
 
 Sonarr uses the TVDB ID to identify shows.
-
-## RSS Feeds (Alternative)
-
-If you prefer RSS feeds or need compatibility with other tools:
-
-### Radarr RSS
-
-1. Settings → Import Lists → **+** → RSS List
-2. URL: `https://stellarr.example.com/rss/movies?token=YOUR_TOKEN`
-
-### Sonarr RSS
-
-RSS support in Sonarr is limited. Use the JSON Custom Lists endpoint instead.
 
 ## Sync Interval
 

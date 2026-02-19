@@ -1,9 +1,7 @@
 ---
-sidebar_position: 3
 title: Configuration
+description: Environment variables, authentication settings, and security configuration for Stellarr.
 ---
-
-# Configuration
 
 Stellarr is configured via environment variables. For Docker deployments, set these in your `.env` file. For AWS, they're stored in Secrets Manager and set via Terraform.
 
@@ -19,7 +17,7 @@ Stellarr is configured via environment variables. For Docker deployments, set th
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `FEED_TOKEN` | Token required to access RSS/list endpoints. If set, append `?token=XXX` to feed URLs | None (public) |
+| `FEED_TOKEN` | Token required to access list endpoints. If set, append `?token=XXX` to feed URLs | None (public) |
 | `PLEX_WEBHOOK_TOKEN` | Token required for Plex webhook and library sync endpoints | None (disabled) |
 | `PLEX_SERVER_NAME` | Only process webhooks from this Plex server name | None (all servers) |
 | `TVDB_API_KEY` | TVDB API key for episode-to-show resolution | None |
@@ -50,7 +48,7 @@ Failed authentication attempts are rate-limited:
 
 ## Feed Protection
 
-If `FEED_TOKEN` is set, all RSS and list endpoints require authentication:
+If `FEED_TOKEN` is set, all list endpoints require authentication:
 
 ```
 # Without token (public)
@@ -86,7 +84,7 @@ The server name must match exactly as shown in Plex.
 
 ## TVDB Integration
 
-Set `TVDB_API_KEY` to enable episode-to-show resolution. This is useful when Plex sends webhooks for individual episodes - Stellarr can look up which show the episode belongs to and mark the correct request as added.
+Set `TVDB_API_KEY` to enable episode-to-show resolution. This is useful when Plex sends webhooks for individual episodes — Stellarr can look up which show the episode belongs to and mark the correct request as added.
 
 Get an API key at [thetvdb.com](https://thetvdb.com/api-information).
 
@@ -110,11 +108,11 @@ enable_waf = false
 
 ## Security Best Practices
 
-1. **Use strong secrets** - Generate `APP_SECRET_KEY` with `openssl rand -hex 32`
-2. **Protect your feeds** - Set `FEED_TOKEN` if your instance is publicly accessible
-3. **Use HTTPS** - Always deploy with TLS (automatic with Caddy or CloudFront)
-4. **Limit Plex servers** - Set `PLEX_SERVER_NAME` if you have multiple servers
-5. **Rotate secrets periodically** - Update tokens if compromised
+1. **Use strong secrets** — Generate `APP_SECRET_KEY` with `openssl rand -hex 32`
+2. **Protect your feeds** — Set `FEED_TOKEN` if your instance is publicly accessible
+3. **Use HTTPS** — Always deploy with TLS (automatic with Caddy or CloudFront)
+4. **Limit Plex servers** — Set `PLEX_SERVER_NAME` if you have multiple servers
+5. **Rotate secrets periodically** — Update tokens if compromised
 
 ## Environment File Example
 
