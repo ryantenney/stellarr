@@ -27,12 +27,12 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.WEBSITE_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ vars.WEBSITE_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Sync assets (long cache)
         run: |
-          aws s3 sync website/ s3://${{ secrets.WEBSITE_S3_BUCKET }}/ \
+          aws s3 sync website/ s3://${{ vars.WEBSITE_S3_BUCKET }}/ \
             --exclude "*.html" \
             --exclude "terraform/*" \
             --exclude "docs/*" \
@@ -41,7 +41,7 @@ jobs:
 
       - name: Sync HTML (short cache)
         run: |
-          aws s3 sync website/ s3://${{ secrets.WEBSITE_S3_BUCKET }}/ \
+          aws s3 sync website/ s3://${{ vars.WEBSITE_S3_BUCKET }}/ \
             --exclude "*" \
             --include "*.html" \
             --exclude "terraform/*" \
@@ -52,5 +52,5 @@ jobs:
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets.WEBSITE_CLOUDFRONT_ID }} \
+            --distribution-id ${{ vars.WEBSITE_CLOUDFRONT_ID }} \
             --paths "/*"
